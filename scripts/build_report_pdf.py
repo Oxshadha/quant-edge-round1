@@ -28,7 +28,7 @@ PDF = ROOT / "report" / "QuantEdge_Round1_Report.pdf"
 # ---- cover details ---------------------------------------------------------------------------------
 TEAM_NAME = "Gmora"
 TRACKING_CODE = "SAIFA-2026-75323CFE"
-SUBMISSION_DATE = "8 October 2026"
+SUBMISSION_DATE = "7 October 2026"
 # ---------------------------------------------------------------------------------------------------
 
 H = json.loads((OUT / "results.json").read_text())
@@ -81,12 +81,12 @@ small = ParagraphStyle("s", parent=body, fontSize=7.6, leading=9.6, alignment=0,
 cell = ParagraphStyle("c", parent=body, fontSize=7.6, leading=9.2, alignment=0, spaceAfter=0)
 cellb = ParagraphStyle("cb", parent=cell, fontName="Helvetica-Bold")
 h1 = ParagraphStyle("h1", parent=ss["Heading1"], fontName="Helvetica-Bold", fontSize=12.5, leading=15,
-                    spaceBefore=8, spaceAfter=5, textColor=ACCENT)
+                    spaceBefore=8, spaceAfter=5, textColor=ACCENT, keepWithNext=1)
 h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName="Helvetica-Bold", fontSize=10, leading=12.5,
-                    spaceBefore=6, spaceAfter=3, textColor=INK)
+                    spaceBefore=6, spaceAfter=3, textColor=INK, keepWithNext=1)
 cap = ParagraphStyle("cap", parent=small, fontName="Helvetica-Oblique", spaceBefore=2, spaceAfter=8)
 boxs = ParagraphStyle("box", parent=body, fontSize=9, leading=12.4, spaceAfter=3)
-title = ParagraphStyle("t", parent=ss["Title"], fontName="Helvetica-Bold", fontSize=22, leading=27,
+title = ParagraphStyle("t", parent=ss["Title"], fontName="Helvetica-Bold", fontSize=34, leading=40,
                        alignment=TA_CENTER, textColor=ACCENT)
 cover = ParagraphStyle("cv", parent=body, fontSize=11, leading=15, alignment=TA_CENTER)
 
@@ -158,15 +158,21 @@ sqrt_vs_path = float((dh["es97_5_G_sqrt"] / dh["es97_5_G_path"]).mean() - 1)
 
 story = []
 # ================================================================= COVER (excluded from page limit)
-story += [Spacer(1, 3.2 * cm), P("SAIFA QUANT EDGE 1.0 · ROUND 1", ParagraphStyle("k", parent=cover, textColor=MUTED, fontSize=10)),
-          Spacer(1, 0.4 * cm), P("Risk Across Tails and Timescales", title), Spacer(1, 0.3 * cm),
-          P("Does crash co-movement fade with the investment horizon, and what does ignoring it do to measured risk?", cover),
-          Spacer(1, 0.8 * cm),
-          P("A wavelet–copula market-risk framework for an equal-weight portfolio of six US sector ETFs<br/>"
-            "(XLE · XLF · XLK · XLV · XLI · XLU), daily data 1999–2026, out-of-sample 2020–2026", cover),
-          Spacer(1, 2.4 * cm), P(f"<b>Team {TEAM_NAME}</b><br/>Tracking code: {TRACKING_CODE}<br/>{SUBMISSION_DATE}", cover),
-          Spacer(1, 2.0 * cm),
-          P("Reproduce every number and figure with one command: <font face='Courier'>python reproduce.py</font>", cover),
+cover_label = ParagraphStyle("cl", parent=cover, fontName="Helvetica-Bold", fontSize=10, textColor=ACCENT, spaceAfter=3)
+cover_q = ParagraphStyle("cq", parent=cover, fontSize=14, leading=19)
+story += [Spacer(1, 2.6 * cm), P("SAIFA QUANT EDGE 1.0 · ROUND 1", ParagraphStyle("k", parent=cover, textColor=MUTED, fontSize=11)),
+          Spacer(1, 0.5 * cm), P("Risk Across Tails<br/>and Timescales", title), Spacer(1, 1.0 * cm),
+          P("RESEARCH QUESTION", cover_label),
+          P("Does tail dependence change with the investment horizon, and what does ignoring it do to a "
+            "portfolio's measured risk?", cover_q),
+          Spacer(1, 0.9 * cm),
+          P("DATASET", cover_label),
+          P("Daily adjusted closing prices of six US sector ETFs (XLE · XLF · XLK · XLV · XLI · XLU), Yahoo Finance, "
+            "1999–2026; equal-weight portfolio; in-sample to 2019, out-of-sample 2020–2026", cover),
+          Spacer(1, 0.9 * cm),
+          P("METHOD", cover_label),
+          P("GARCH-t margins, MODWT wavelet horizon bands and copulas; 1-day and 10-day VaR / ES backtests", cover),
+          Spacer(1, 2.0 * cm), P(f"<b>Team {TEAM_NAME}</b><br/>Tracking code: {TRACKING_CODE}<br/>{SUBMISSION_DATE}", cover),
           PageBreak()]
 
 # ================================================================= EXECUTIVE SUMMARY
@@ -502,22 +508,22 @@ story.append(P(
 # ================================================================= APPENDIX A
 story.append(P("Appendix A. Reproducibility and use of AI tools", h1))
 story.append(P(
-    "<b>Reproduce.</b> Everything runs locally with no downloads beyond the Python packages. Either open "
-    "<font face='Courier'>QuantEdge_Gmora.ipynb</font> (the full analysis with commentary) and choose Run All, or run <font face='Courier'>pip install -r "
-    "requirements.txt</font> followed by <font face='Courier'>python reproduce.py</font>. Both run the unit tests, regenerate every table, figure and number in this report from the cached price file "
+    "<b>Reproduce.</b> Everything runs locally with no downloads beyond the Python packages. Run <font face='Courier'>pip install -r "
+    "requirements.txt</font> followed by <font face='Courier'>python -m src.run_all</font>. This one command regenerates every table, "
+    "figure and number in this report from the bundled price file "
     "(<font face='Courier'>data/etf_prices.csv</font>; <font face='Courier'>src/data.py</font> re-downloads it from "
-    "Yahoo Finance with <font face='Courier'>force=True</font>) and rebuild this PDF. All randomness is seeded. The "
+    "Yahoo Finance with <font face='Courier'>force=True</font>). All randomness is seeded. The "
     "report text reads its numbers from <font face='Courier'>outputs/results.json</font>; none are typed by hand.", body))
 story.append(P(
     "<b>AI use.</b> All cognitive and statistical work in this study was done by Team Gmora: framing the research "
     "question, choosing the portfolio, data and sample split, selecting the margin, wavelet and copula models, "
     "designing the out-of-sample experiments and validation tests, interpreting the results, and forming the "
-    "recommendation. AI assistants (Anthropic Claude) were used as tools under the team's direction for literature "
-    "search, writing and debugging code, reviewing code for errors, and editing the text. The team checked every "
+    "recommendation. AI assistants (Anthropic Claude) were used as tools under the team's direction for "
+    "writing and debugging code, and reviewing code for errors. The team checked every "
     "result and can explain every line of code and every claim in this report.", body))
 
 # ================================================================= REFERENCES (excluded)
-story.append(P("References", h1))
+ref_block = [P("References", h1)]
 refs = [
     "Acerbi, C. & Szekely, B. (2014). Backtesting expected shortfall. <i>Risk</i>, December.",
     "Ang, A. & Chen, J. (2002). Asymmetric correlations of equity portfolios. <i>J. Financial Economics</i> 63, 443–494.",
@@ -538,8 +544,8 @@ refs = [
     "Politis, D. & Romano, J. (1994). The stationary bootstrap. <i>J. American Statistical Association</i> 89, 1303–1313.",
     "Schmidt, R. & Stadtmüller, U. (2006). Non-parametric estimation of tail dependence. <i>Scandinavian J. Statistics</i> 33, 307–335.",
 ]
-for r in refs:
-    story.append(P(r, small))
+ref_block += [P(r, small) for r in refs]
+story.append(KeepTogether(ref_block))
 
 
 def main():
