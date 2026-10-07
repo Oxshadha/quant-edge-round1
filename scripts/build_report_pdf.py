@@ -518,8 +518,8 @@ story.append(P(
     "<b>AI use.</b> All cognitive and statistical work in this study was done by Team Gmora: framing the research "
     "question, choosing the portfolio, data and sample split, selecting the margin, wavelet and copula models, "
     "designing the out-of-sample experiments and validation tests, interpreting the results, and forming the "
-    "recommendation. AI assistants (Anthropic Claude) were used as tools under the team's direction for literature "
-    "search, writing and debugging code, and reviewing code for errors. The team checked every "
+    "recommendation. AI assistants (Anthropic Claude) were used as tools under the team's direction for "
+    "writing and debugging code, and reviewing code for errors. The team checked every "
     "result and can explain every line of code and every claim in this report.", body))
 
 # ================================================================= REFERENCES (excluded)
