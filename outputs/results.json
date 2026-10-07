@@ -947,6 +947,13 @@
     "es97_5_10d_E_join": 0.056240760669456324,
     "es97_5_10d_WC_emp": 0.060075163651390505
   },
+  "eda": {
+    "duplicate_dates": 0,
+    "rows_dropped_by_alignment": 0,
+    "corr_vol_link": 0.5415823351134135,
+    "avg_corr_min": 0.13179936262563294,
+    "avg_corr_max": 0.8509022579265629
+  },
   "seed_robustness": {
     "hits99_HS": {
       "min": 25,

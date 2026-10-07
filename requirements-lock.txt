@@ -1,0 +1,10 @@
+# Exact versions used to produce the submitted report (Python 3.13, Linux). Optional: pip install -r requirements-lock.txt
+arch==8.0.0
+numpy==2.5.3
+pandas==3.0.6
+scipy==1.18.1
+PyWavelets==1.10.0
+matplotlib==3.11.2
+reportlab==5.0.1
+yfinance==1.7.0
+pytest==9.1.1

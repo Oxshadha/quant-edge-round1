@@ -125,3 +125,73 @@ def fig_refits(rf: pd.DataFrame):
     ax.legend(ncol=3, fontsize=7.5)
     fig.tight_layout()
     _save(fig, "fig5_rolling_lambda.png")
+
+
+def fig_data_overview(rets: pd.DataFrame, avg_corr: pd.Series, oos_start: str):
+    """Growth of $1, rolling volatility and rolling average correlation (three panels, one y-axis each)."""
+    fig, axes = plt.subplots(3, 1, figsize=(9.2, 6.4), sharex=True, gridspec_kw={"height_ratios": [1.5, 1, 1]})
+    growth = np.exp(rets.cumsum())
+    cols = [S1, S2, S3, S4, "#e87ba4", "#4a3aa7"]
+    for c, col in zip(rets.columns, cols):
+        axes[0].plot(growth.index, growth[c], color=col, lw=1.0, label=c)
+    port = np.expm1(rets).mean(axis=1)
+    axes[0].plot(growth.index, (1 + port).cumprod(), color=INK, lw=1.8, label="Equal-weight portfolio")
+    axes[0].set_yscale("log")
+    axes[0].set_ylabel("Growth of $1 (log)")
+    axes[0].set_title("(a) Cumulative performance", loc="left")
+    axes[0].legend(ncol=4, fontsize=7.5, loc="upper left")
+    vol = port.rolling(250).std() * np.sqrt(252) * 100
+    axes[1].plot(vol.index, vol, color=S2, lw=1.2)
+    axes[1].set_ylabel("% per year")
+    axes[1].set_title("(b) Portfolio volatility, trailing 250 days", loc="left")
+    axes[2].plot(avg_corr.index, avg_corr, color=S1, lw=1.2)
+    axes[2].set_ylabel("Avg. pairwise corr.")
+    axes[2].set_title("(c) Average correlation between sectors, trailing 250 days", loc="left")
+    for ax in axes:
+        ax.axvline(pd.Timestamp(oos_start), color=INK2, lw=0.8, ls="--")
+    axes[2].text(pd.Timestamp(oos_start), axes[2].get_ylim()[0] + 0.02, "  out-of-sample", color=INK2, fontsize=7.5)
+    fig.tight_layout()
+    _save(fig, "fig0a_data_overview.png")
+
+
+def fig_diagnostics(port: pd.Series, r: pd.DataFrame, z: pd.DataFrame, acf_fn, lags: int = 20):
+    """(a) QQ plot of portfolio returns vs normal; (b) autocorrelation of squared returns before/after GARCH."""
+    from scipy import stats as st
+    fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.3))
+    x = np.sort((port - port.mean()) / port.std())
+    qn = st.norm.ppf((np.arange(1, len(x) + 1) - 0.5) / len(x))
+    axes[0].scatter(qn, x, s=4, color=S1, label="Portfolio daily returns")
+    axes[0].plot([-4.5, 4.5], [-4.5, 4.5], color=INK2, lw=1, ls="--", label="Normal distribution")
+    axes[0].set_xlabel("Normal quantile")
+    axes[0].set_ylabel("Standardised return")
+    axes[0].set_title("(a) Fat tails: returns vs normal", loc="left")
+    axes[0].legend(fontsize=7.5, loc="upper left")
+    k = np.arange(1, lags + 1)
+    before = np.mean([acf_fn(r[c].to_numpy() ** 2, lags) for c in r.columns], axis=0)
+    after = np.mean([acf_fn(z[c].to_numpy() ** 2, lags) for c in z.columns], axis=0)
+    axes[1].bar(k - 0.2, before, width=0.4, color=S2, label="Squared returns")
+    axes[1].bar(k + 0.2, after, width=0.4, color=S3, label="Squared GARCH residuals")
+    band = 1.96 / np.sqrt(len(z))
+    axes[1].axhspan(-band, band, color=GREY, alpha=0.25, label="95% band, no autocorrelation")
+    axes[1].set_xticks([1, 5, 10, 15, 20])
+    axes[1].set_xlabel("Lag (days)")
+    axes[1].set_ylabel("Autocorrelation (avg. over sectors)")
+    axes[1].set_title("(b) Volatility clustering removed by GARCH", loc="left")
+    axes[1].legend(fontsize=7.5)
+    fig.tight_layout()
+    _save(fig, "fig0b_diagnostics.png")
+
+
+def fig_wavelet_example(z: pd.Series, bands: dict, start: str, end: str):
+    """How one residual series splits into the three horizon bands (in-sample window)."""
+    fig, axes = plt.subplots(4, 1, figsize=(9.2, 5.2), sharex=True)
+    idx = z.index
+    m = (idx >= start) & (idx <= end)
+    axes[0].plot(idx[m], z[m], color=INK2, lw=0.7)
+    axes[0].set_title(f"{z.name}: GARCH-standardised residuals and their MODWT bands", loc="left")
+    for ax, (b, col, lab) in zip(axes[1:], [("H1", S1, "H1: 2–8 days"), ("H2", S2, "H2: 8–32 days"),
+                                             ("H3", S3, "H3: > 32 days")]):
+        ax.plot(idx[m], bands[b][m], color=col, lw=0.9)
+        ax.set_ylabel(lab, fontsize=7.5)
+    fig.tight_layout()
+    _save(fig, "fig0c_wavelet_bands.png")

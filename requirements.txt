@@ -1,10 +1,11 @@
-# Tested with Python 3.13 (works on 3.11+). Exact versions used to produce the report:
-arch==8.0.0
-numpy==2.5.3
-pandas==3.0.6
-scipy==1.18.1
-PyWavelets==1.10.0
-matplotlib==3.11.2
-reportlab==5.0.1
-yfinance==1.7.0
-pytest==9.1.1
+# Python 3.10 - 3.13. Version ranges keep installation easy on Windows, macOS and Linux.
+# requirements-lock.txt lists the exact versions used to produce the submitted report.
+numpy>=1.26,<3
+pandas>=2.1,<4
+scipy>=1.11,<2
+arch>=7.0,<9
+PyWavelets>=1.5
+matplotlib>=3.8
+reportlab>=4.0
+yfinance>=0.2.40
+pytest>=7

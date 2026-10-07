@@ -108,3 +108,16 @@ def test_empirical_quantile_monotone():
     z = RNG.standard_normal(1000)
     q = empirical_quantile(z, np.linspace(0.01, 0.99, 50))
     assert np.all(np.diff(q) >= 0)
+
+
+def test_ljung_box_and_arch_lm():
+    from src.eda import arch_lm, ljung_box
+    e = RNG.standard_normal(3000)
+    assert ljung_box(e)[1] > 0.01 and arch_lm(e)[1] > 0.01  # white noise: no rejection
+    s = np.empty(3000)
+    s[0] = 1.0
+    x = np.empty(3000)
+    for t in range(3000):  # GARCH(1,1) process: clustering must be detected
+        s[t] = 0.05 + 0.15 * (x[t - 1] ** 2 if t else 0) + 0.8 * (s[t - 1] if t else 1.0)
+        x[t] = np.sqrt(s[t]) * RNG.standard_normal()
+    assert ljung_box(x**2)[1] < 0.001 and arch_lm(x)[1] < 0.001

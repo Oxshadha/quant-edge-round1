@@ -1,4 +1,6 @@
-# SAIFA Quant Edge 1.0, Round 1: Risk Across Tails and Timescales (Team Gmora)
+# SAIFA Quant Edge 1.0, Round 1: Risk Across Tails and Timescales
+
+**Team Gmora** · Tracking code **SAIFA-2026-75323CFE**
 
 **Question.** Does tail dependence change with the investment horizon, and what does ignoring this do to a
 portfolio's measured risk?
@@ -11,34 +13,56 @@ against a Gaussian-copula benchmark and historical simulation.
 
 The report is `report/QuantEdge_Round1_Report.pdf`. The desk recommendation is `outputs/manager_recommendation.txt`.
 
-## Reproduce (one command)
+## The analysis notebook
+
+`QuantEdge_Gmora.ipynb` is the complete analysis as one connected chain, with our commentary on what each step shows
+and the decision it leads to:
+
+1. Data loading and quality checks
+2. Visualisation (performance, volatility, correlation over time)
+3. Exploratory data analysis (moments, normality, volatility clustering, joint extremes)
+4. Preprocessing (GARCH-t filtering and its diagnostics, MODWT wavelet bands, pseudo-observations)
+5. Model building: tail dependence across horizons, with bootstrap tests (part a)
+6. Out-of-sample forecasting engine
+7. Evaluation: one-day and ten-day backtests, model comparison, seed robustness (part b)
+8. Answer, recommendation and the PDF report
+
+The notebook is saved with all outputs, so it can be read without running it.
+
+## Reproduce
+
+Everything runs locally. The price data is bundled (`data/etf_prices.csv`), so nothing is downloaded except the
+Python packages. Requires Python 3.10 to 3.13 on Windows, macOS or Linux.
+
+**Option 1: notebook.** Open `QuantEdge_Gmora.ipynb` in Jupyter or VS Code from the unzipped folder and choose
+*Run All*. It installs the requirements, runs the unit tests and the full analysis, and rebuilds the PDF
+(about 10 minutes).
+
+**Option 2: one command.**
 
 ```bash
-make reproduce
+pip install -r requirements.txt
+python reproduce.py
 ```
 
-This creates `.venv` with pinned dependencies, runs the unit tests, regenerates every number, table and
-figure (`outputs/`, `report/assets/`) and rebuilds the PDF. Runtime is about 10 minutes on a laptop
-(most of it is the bootstrap and the Monte Carlo seed-robustness re-runs).
+`reproduce.py` runs the 16 unit tests, regenerates every number, table and figure (`outputs/`,
+`report/assets/`) and rebuilds `report/QuantEdge_Round1_Report.pdf`. On macOS/Linux, `make reproduce` does the
+same inside a fresh virtual environment.
 
-Manual equivalent:
+**Verified.** The full pipeline was run end to end on Python 3.13 and 3.12 (latest packages) and on Python 3.11
+with older packages (numpy 1.26, pandas 2.1, scipy 1.11, arch 7.0). `requirements-lock.txt` lists the exact
+versions used for the submitted report.
 
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q                 # 15 unit tests
-.venv/bin/python -m src.run_all               # pipeline -> outputs/
-.venv/bin/python scripts/build_report_pdf.py  # report -> report/QuantEdge_Round1_Report.pdf
-```
-
-Data: `data/etf_prices.csv` (Yahoo Finance adjusted closes, cached so results are exactly reproducible).
-To refresh from Yahoo: `python -c "from src.data import download_prices; download_prices(force=True)"`.
+To refresh prices from Yahoo Finance (optional, needs internet):
+`python -c "from src.data import download_prices; download_prices(force=True)"`.
 
 ## Code map
 
 | File | What it does |
 |------|--------------|
 | `src/config.py` | Every design constant (tickers, windows, horizons, bands, seeds) |
-| `src/data.py` | Download / load prices, log returns |
+| `src/data.py` | Load the bundled prices (optional re-download), log returns |
+| `src/eda.py` | Data-quality checks, return statistics, normality and volatility-clustering tests, joint extremes, GARCH diagnostics |
 | `src/margins.py` | GARCH(1,1)-t fit, daily variance update, pseudo-observations, FHS shocks |
 | `src/modwt.py`, `src/wavelets.py` | MODWT multiresolution analysis (additive, LA(8)), horizon bands |
 | `src/copulas_fit.py` | Gaussian, Student-t, Clayton (full likelihoods), empirical copula; simulation |
@@ -51,13 +75,14 @@ To refresh from Yahoo: `python -c "from src.data import download_prices; downloa
 | `src/figures.py` | Figures |
 | `src/run_all.py` | Orchestration, `outputs/results.json`, recommendation |
 | `scripts/build_report_pdf.py` | Builds the PDF; every number is read from `outputs/` |
-| `tests/test_core.py` | Unit tests (copula selection, MRA additivity, test statistics, risk maths) |
+| `tests/test_core.py` | 16 unit tests (copula selection, MRA additivity, test statistics, risk maths) |
 
 ## Main outputs
 
 | File | Content |
 |------|---------|
 | `outputs/results.json` | Every headline number used in the report |
+| `outputs/eda_*.csv` | Data quality, return statistics, correlations, joint extremes, GARCH diagnostics, wavelet variance shares |
 | `outputs/insample_copula_fits.csv` | Copula AIC by scale band |
 | `outputs/tail_comovement_by_band.csv`, `tail_tests_by_band.csv` | χ_L, χ_U by wavelet band, CIs and tests |
 | `outputs/tail_comovement_by_horizon.csv`, `tail_tests_by_horizon.csv` | Same for 1/5/10/21-day returns |
