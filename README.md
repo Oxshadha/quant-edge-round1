@@ -11,27 +11,32 @@ against a Gaussian-copula benchmark and historical simulation.
 
 The report is `report/QuantEdge_Round1_Report.pdf`. The desk recommendation is `outputs/manager_recommendation.txt`.
 
-## Reproduce (one command)
+## Reproduce
+
+Everything runs locally. The price data is bundled (`data/etf_prices.csv`), so nothing is downloaded except the
+Python packages. Requires Python 3.10 to 3.13 on Windows, macOS or Linux.
+
+**Option 1: notebook.** Open `Reproduce.ipynb` in Jupyter or VS Code from the unzipped folder and choose *Run All*.
+It installs the requirements, runs the unit tests and the full pipeline, rebuilds the PDF, and shows the key
+tables and figures. Set `RUN_FULL = False` in the first cell to only display the stored results (seconds).
+
+**Option 2: one command.**
 
 ```bash
-make reproduce
+pip install -r requirements.txt
+python reproduce.py
 ```
 
-This creates `.venv` with pinned dependencies, runs the unit tests, regenerates every number, table and
-figure (`outputs/`, `report/assets/`) and rebuilds the PDF. Runtime is about 10 minutes on a laptop
-(most of it is the bootstrap and the Monte Carlo seed-robustness re-runs).
+`reproduce.py` runs the 15 unit tests, regenerates every number, table and figure (`outputs/`,
+`report/assets/`) and rebuilds `report/QuantEdge_Round1_Report.pdf`. Runtime is about 10 minutes on a laptop,
+mostly the bootstrap and the Monte Carlo seed-robustness re-runs. On macOS/Linux, `make reproduce` does the same
+inside a fresh virtual environment.
 
-Manual equivalent:
+`requirements-lock.txt` lists the exact package versions used for the submitted report. The pipeline was also
+run end to end on Python 3.11 with older packages and on Python 3.12 (see the verification note below).
 
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q                 # 15 unit tests
-.venv/bin/python -m src.run_all               # pipeline -> outputs/
-.venv/bin/python scripts/build_report_pdf.py  # report -> report/QuantEdge_Round1_Report.pdf
-```
-
-Data: `data/etf_prices.csv` (Yahoo Finance adjusted closes, cached so results are exactly reproducible).
-To refresh from Yahoo: `python -c "from src.data import download_prices; download_prices(force=True)"`.
+To refresh prices from Yahoo Finance (optional, needs internet):
+`python -c "from src.data import download_prices; download_prices(force=True)"`.
 
 ## Code map
 

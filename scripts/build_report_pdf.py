@@ -160,7 +160,7 @@ story += [Spacer(1, 3.2 * cm), P("SAIFA QUANT EDGE 1.0 · ROUND 1", ParagraphSty
             "(XLE · XLF · XLK · XLV · XLI · XLU), daily data 1999–2026, out-of-sample 2020–2026", cover),
           Spacer(1, 2.4 * cm), P(f"<b>Team {TEAM_NAME}</b><br/>{SUBMISSION_DATE}", cover),
           Spacer(1, 2.0 * cm),
-          P("Reproduce every number and figure with one command: <font face='Courier'>make reproduce</font>", cover),
+          P("Reproduce every number and figure with one command: <font face='Courier'>python reproduce.py</font>", cover),
           PageBreak()]
 
 # ================================================================= EXECUTIVE SUMMARY
@@ -449,10 +449,11 @@ story.append(P(
 # ================================================================= APPENDIX A
 story.append(P("Appendix A. Reproducibility and use of AI tools", h1))
 story.append(P(
-    "<b>Reproduce.</b> <font face='Courier'>make reproduce</font> creates a virtual environment with pinned versions, "
-    "runs the unit tests, regenerates every table, figure and number in this report from the cached price file "
+    "<b>Reproduce.</b> Everything runs locally with no downloads beyond the Python packages. Either open "
+    "<font face='Courier'>Reproduce.ipynb</font> and choose Run All, or run <font face='Courier'>pip install -r "
+    "requirements.txt</font> followed by <font face='Courier'>python reproduce.py</font>. Both run the unit tests, regenerate every table, figure and number in this report from the cached price file "
     "(<font face='Courier'>data/etf_prices.csv</font>; <font face='Courier'>src/data.py</font> re-downloads it from "
-    "Yahoo Finance with <font face='Courier'>force=True</font>) and rebuilds this PDF. All randomness is seeded. The "
+    "Yahoo Finance with <font face='Courier'>force=True</font>) and rebuild this PDF. All randomness is seeded. The "
     "report text reads its numbers from <font face='Courier'>outputs/results.json</font>; none are typed by hand.", body))
 story.append(P(
     "<b>AI use.</b> All cognitive and statistical work in this study was done by Team Gmora: framing the research "

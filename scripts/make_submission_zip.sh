@@ -8,7 +8,7 @@ mkdir -p submission
 rm -f "$OUT"
 
 zip -r "$OUT" \
-  README.md requirements.txt Makefile pytest.ini \
+  README.md requirements.txt requirements-lock.txt Makefile pytest.ini reproduce.py Reproduce.ipynb \
   src tests scripts/build_report_pdf.py scripts/make_submission_zip.sh \
   report/QuantEdge_Round1_Report.pdf report/assets/fig*.png \
   outputs/results.json outputs/manager_recommendation.txt \
