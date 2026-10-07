@@ -73,7 +73,7 @@ def fig_oos_1d(d1: pd.DataFrame):
         ax.scatter(d.index[hit], d.r_p[hit] * 100, s=14, color=CRIT, zorder=4, label="Breach of WT VaR")
         ax.set_ylabel("% return")
         ax.set_title(title, loc="left")
-    axes[0].legend(ncol=3, fontsize=7.5, loc="lower center", bbox_to_anchor=(0.5, 1.08))
+    axes[0].legend(ncol=3, fontsize=7.5, loc="lower left")
     fig.tight_layout()
     _save(fig, "fig2_oos_var99.png")
 
@@ -82,7 +82,7 @@ def fig_traffic(d1: pd.DataFrame):
     fig, ax = plt.subplots(figsize=(9.2, 2.8))
     ax.axhspan(-0.5, 4.5, color=GOOD, alpha=0.07)
     ax.axhspan(4.5, 9.5, color=WARN, alpha=0.10)
-    ax.axhspan(9.5, 100, color=CRIT, alpha=0.07)
+    ax.axhspan(9.5, 40, color=CRIT, alpha=0.07)
     for m, col, lab in [("HS", S1, "Historical simulation"), ("G", S2, "Gaussian copula"),
                         ("T", S4, "t-copula (daily)"), ("WT", S3, "Wavelet t-copula (H1)")]:
         c = (d1.r_p < -d1[f"var99_{m}"]).astype(int).rolling(250).sum()
@@ -90,8 +90,7 @@ def fig_traffic(d1: pd.DataFrame):
     ax.text(d1.index[5], 2, "green", color=GOOD, fontsize=8)
     ax.text(d1.index[5], 6.5, "yellow", color=INK2, fontsize=8)
     ax.text(d1.index[5], 11.5, "red", color=CRIT, fontsize=8)
-    top = max(int((d1.r_p < -d1[f"var99_{m}"]).rolling(250).sum().max()) for m in ("HS", "G", "T", "WT"))
-    ax.set_ylim(0, max(12, top + 2))
+    ax.set_ylim(0, None)
     ax.set_ylabel("99% exceptions, last 250 days")
     ax.set_title("Basel traffic light: rolling 250-day count of 99% VaR exceptions", loc="left")
     ax.legend(ncol=4, fontsize=7.5, loc="upper right")
@@ -101,14 +100,14 @@ def fig_traffic(d1: pd.DataFrame):
 
 def fig_10d(dh: pd.DataFrame):
     fig, ax = plt.subplots(figsize=(9.2, 3.2))
-    for m, col, lab in [("G_sqrt", S2, r"Gaussian 1-day × $\sqrt{10}$"), ("G_path", S4, "Gaussian copula, simulated paths"),
-                        ("WC_emp", S3, "Wavelet empirical copula (H2)")]:
+    for m, col, lab in [("G_sqrt", S2, r"Gaussian 1-day × $\sqrt{10}$"), ("T_path", S4, "t-copula, simulated paths"),
+                        ("WC", S3, "Wavelet-copula (H2-matched)")]:
         ax.step(dh.index, dh[f"es97_5_{m}"] * 100, where="post", color=col, lw=1.3, label=f"ES 97.5%: {lab}")
     loss = -dh.r_h * 100
     ax.scatter(dh.index, loss, s=10, color=INK2, label="Realised 10-day loss", zorder=3)
-    hit = dh.r_h < -dh["var97_5_WC_emp"]
+    hit = dh.r_h < -dh["var97_5_WC"]
     ax.scatter(dh.index[hit], loss[hit], s=22, facecolors="none", edgecolors=CRIT, linewidths=1.4,
-               label="Beyond full-model VaR 97.5%", zorder=4)
+               label="Beyond WC VaR 97.5%", zorder=4)
     ax.set_ylabel("% of portfolio")
     ax.set_title("10-day Expected Shortfall 97.5% vs realised 10-day losses (non-overlapping windows)", loc="left")
     ax.legend(ncol=2, fontsize=7.5, loc="upper right")

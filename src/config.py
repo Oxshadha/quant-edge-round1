@@ -51,4 +51,4 @@ HORIZON_BAND = {1: "H1", 5: "H1", 10: "H2", 21: "H2"}
 TAIL_Q = (0.05, 0.10)   # quantile levels for empirical tail co-movement
 AGG_HORIZONS = (1, 5, 10, 21)
 N_BOOT = 400            # stationary-bootstrap replications
-BOOT_BLOCK = 60         # mean block length (days), longer than the H2 scale
+BOOT_BLOCK = 60         # mean block length (days) — longer than the H2 scale
