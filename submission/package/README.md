@@ -45,5 +45,5 @@ bundled price file means nothing is downloaded. To refresh prices from Yahoo Fin
 ## AI disclosure
 
 All cognitive and statistical work was done by Team Gmora. AI assistants (Anthropic Claude) were used as tools under
-the team's direction for literature search, writing and debugging code, reviewing code and editing text. See
+the team's direction for literature search, writing and debugging code, and reviewing code. See
 Appendix A of the report.
