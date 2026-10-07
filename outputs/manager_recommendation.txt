@@ -1,0 +1,7 @@
+DESK RECOMMENDATION (equal-weight US sector ETF book: XLE XLF XLK XLV XLI XLU)
+
+From tomorrow: replace the Gaussian copula and the sqrt(10) rule with tail-aware, horizon-matched ES.
+1. Daily limit: 1-day ES 97.5% from the t-copula on daily-updated GARCH margins = 1.94% of NAV today (Gaussian copula: 1.78%). Out-of-sample 2020-01-02 to 2026-10-06: Gaussian 99% VaR breaches 21 vs 17 expected (t-copula 17).
+2. 10-day limit: ES 97.5% from the wavelet empirical-copula model = 6.01% today (sqrt(10) x Gaussian 6.20%, Gaussian paths 5.38%). On average the Gaussian path model sits 12% below it.
+3. Diversification: crash co-movement does not fade with horizon (chi_L 0.36 at 2-8 days, 0.31 beyond 32 days) while rally co-movement does (0.35 -> 0.20). Do not rely on sector rotation as a crash hedge.
+4. Trigger: escalate when the 250-day count of 99% breaches reaches 5 (Basel yellow). Internal overlay; regulatory capital model unchanged until independent validation.
