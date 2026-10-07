@@ -239,7 +239,7 @@ story.append(P(
     "are kept: they are exactly the observations a tail-risk study is about.", body))
 rows = [["Series", "Ann. return", "Ann. vol.", "Skew", "Excess kurtosis", "Worst day", "Jarque–Bera p", "Ljung–Box r² p", "ARCH-LM p"]]
 for c, rr in est.iterrows():
-    rows.append([c, f"{rr.ann_mean_pct:.1f}%", f"{rr.ann_vol_pct:.1f}%", f"{rr.skew:.2f}", f"{rr.excess_kurtosis:.1f}",
+    rows.append([c, f"{rr.ann_mean_pct:.1f}%", f"{rr.ann_vol_pct:.1f}%", f"{rr['skew']:.2f}", f"{rr.excess_kurtosis:.1f}",
                  f"{rr.worst_day_pct:.1f}%", pv(rr.jarque_bera_p), pv(rr.ljung_box_r2_p), pv(rr.arch_lm_p)])
 story.append(table(rows, [2.0, 1.8, 1.7, 1.4, 2.0, 1.7, 2.3, 2.3, 2.0]))
 story.append(P("Table 2. Daily log returns, 1999–2019 (estimation sample). Jarque–Bera tests normality; Ljung–Box on "
