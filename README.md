@@ -95,6 +95,6 @@ To refresh prices from Yahoo Finance (optional, needs internet):
 All cognitive and statistical work was done by Team Gmora: the research question, portfolio, data and sample
 split, the choice of margin, wavelet and copula models, the design of the out-of-sample experiments and
 validation tests, the interpretation of results and the recommendation. AI assistants (Anthropic Claude) were used
-as tools under the team's direction for literature search, writing and debugging code, reviewing code for errors,
-and editing text. The team checked every result and can explain every line of code and every claim.
+as tools under the team's direction for literature search, writing and debugging code, and reviewing code for
+errors. The team checked every result and can explain every line of code and every claim.
 See Appendix A of the report.
