@@ -38,6 +38,11 @@ implied = pd.read_csv(OUT / "model_implied_tail_by_horizon.csv")
 sub = pd.read_csv(OUT / "subperiod_hit_rates.csv")
 rob = pd.read_csv(OUT / "seed_robustness.csv")
 dh = pd.read_csv(OUT / f"oos_{H_DAYS}d_forecasts.csv", index_col=0, parse_dates=True)
+est = pd.read_csv(OUT / "eda_stats.csv", index_col=0)
+gd = pd.read_csv(OUT / "eda_garch.csv", index_col=0)
+qual = pd.read_csv(OUT / "eda_quality.csv", index_col=0)
+coex = pd.read_csv(OUT / "eda_co_extremes.csv", index_col=0)
+EDA = H.get("eda", {})
 S1, SH, T, TT = H["oos_1d"], H["oos_10d"], H["tail_band_q05"], H["tail_band_tests_q05"]
 HT, HTT = H["tail_horizon_q10"], H["tail_horizon_tests_q10"]
 
@@ -189,7 +194,7 @@ story.append(box([
       f"daily limit, and set the {H_DAYS}-day ES from the horizon-matched wavelet model instead of √10 × 1-day: "
       f"today that is {pct(lat['es97_5_10d_' + BASE], 2)} "
       f"of NAV. Over 2020–2026 the √10 shortcut sat below this model in {pct(sqrt_below, 0)} of windows. "
-      f"Details in Section 5.", boxs)]))
+      f"Details in Section 6.", boxs)]))
 story.append(Spacer(1, 6))
 
 # ================================================================= 1. DESIGN
@@ -220,8 +225,55 @@ design = [
 story.append(table(design, [2.0, 4.6, 6.0, 4.8]))
 story.append(P("Table 1. Design choices. Every choice is a constant in <font face='Courier'>src/config.py</font>.", cap))
 
+# ================================================================= 2. DATA AND EDA
+co5 = coex[(coex.q == 0.05)].set_index("side")
+story.append(P("2. Data, exploration and preprocessing", h1))
+story.append(P(
+    f"<b>Data quality.</b> The bundled file holds {H['data']['n_days']:,} trading days from {H['data']['start']} to "
+    f"{H['data']['end']} for all six ETFs, with {int(qual['missing_in_raw_file'].sum())} missing prices, "
+    f"{EDA.get('duplicate_dates', 0)} duplicate dates and {int(qual['non_positive_prices'].sum())} non-positive prices, so "
+    "no imputation or filtering is needed. Prices are dividend-adjusted closes; we work with daily log returns for "
+    "modelling and simple returns for portfolio profit and loss. The largest daily moves (for example "
+    f"{qual['largest_abs_daily_move_pct'].max():.1f}% for {qual['largest_abs_daily_move_pct'].idxmax()} on "
+    f"{qual.loc[qual['largest_abs_daily_move_pct'].idxmax(), 'date_of_largest_move']}) are genuine market events and "
+    "are kept: they are exactly the observations a tail-risk study is about.", body))
+rows = [["Series", "Ann. return", "Ann. vol.", "Skew", "Excess kurtosis", "Worst day", "Jarque–Bera p", "Ljung–Box r² p", "ARCH-LM p"]]
+for c, rr in est.iterrows():
+    rows.append([c, f"{rr.ann_mean_pct:.1f}%", f"{rr.ann_vol_pct:.1f}%", f"{rr.skew:.2f}", f"{rr.excess_kurtosis:.1f}",
+                 f"{rr.worst_day_pct:.1f}%", pv(rr.jarque_bera_p), pv(rr.ljung_box_r2_p), pv(rr.arch_lm_p)])
+story.append(table(rows, [2.0, 1.8, 1.7, 1.4, 2.0, 1.7, 2.3, 2.3, 2.0]))
+story.append(P("Table 2. Daily log returns, 1999–2019 (estimation sample). Jarque–Bera tests normality; Ljung–Box on "
+               "squared returns (10 lags) and ARCH-LM (5 lags) test for volatility clustering.", cap))
+story.append(P(
+    f"<b>What the data show.</b> Every sector has excess kurtosis between {est.excess_kurtosis.iloc[:-1].min():.1f} and "
+    f"{est.excess_kurtosis.iloc[:-1].max():.1f} and every normality test rejects, so a normal margin would understate "
+    "tail losses. Squared returns are strongly autocorrelated (all p &lt; 0.001): calm and turbulent periods cluster. "
+    f"Dependence is not constant either: the trailing one-year average correlation between sectors ranges from "
+    f"{EDA.get('avg_corr_min', float('nan')):.2f} to {EDA.get('avg_corr_max', float('nan')):.2f} and moves with "
+    f"portfolio volatility (correlation {EDA.get('corr_vol_link', float('nan')):.2f}), so diversification is weakest "
+    f"exactly when it is needed (Figure 1). On days when one sector has a worst-5% day, on average "
+    f"{co5.loc['crash','avg_other_sectors_also_extreme']:.1f} of the other five do too, against "
+    f"{co5.loc['crash','if_independent']:.2f} if they were independent.", body))
+story.append(fig("fig0a_data_overview.png", 16.5, "Figure 1. (a) Growth of $1 in each sector and the equal-weight "
+                 "portfolio (log scale); (b) portfolio volatility; (c) average pairwise correlation. Dashed line: start "
+                 "of the out-of-sample period."))
+story.append(P(
+    "<b>Preprocessing decisions.</b> (1) Model each sector with GARCH(1,1) and Student-t innovations, because returns "
+    "are fat-tailed and volatility clusters. (2) Measure dependence on the GARCH-standardised residuals, not on raw "
+    "returns, so that shared volatility is not mistaken for tail dependence. Figure 2 confirms the filter works: the "
+    "autocorrelation of squared residuals falls inside the no-autocorrelation band, residual excess kurtosis drops to "
+    f"{gd.z_excess_kurtosis.min():.1f}–{gd.z_excess_kurtosis.max():.1f}, and the Ljung–Box test on squared residuals "
+    f"no longer rejects for {int((gd.ljung_box_z2_p > 0.05).sum())} of 6 sectors "
+    f"(utilities keep mild clustering, p = {gd.loc['XLU','ljung_box_z2_p']:.3f}). GARCH persistence α + β is "
+    f"{gd.persistence.min():.3f}–{gd.persistence.max():.3f}. (3) Convert residuals to ranks for the copulas, so the "
+    "dependence estimate does not depend on the margins. (4) Re-estimate every 20 days on a rolling window, because "
+    "Figure 1 shows dependence drifting over time.", body))
+story.append(fig("fig0b_diagnostics.png", 16.5, "Figure 2. (a) Standardised portfolio returns against the normal "
+                 "distribution, 1999–2019; (b) autocorrelation of squared returns before and after GARCH filtering, "
+                 "averaged over the six sectors."))
+
 # ================================================================= 2. METHOD
-story.append(P("2. Method", h1))
+story.append(P("3. Method", h1))
 story.append(P(
     "<b>Margins.</b> For each sector, r<sub>t</sub> = μ + σ<sub>t</sub>z<sub>t</sub> with "
     "σ<sup>2</sup><sub>t</sub> = ω + α(r<sub>t-1</sub> − μ)<sup>2</sup> + βσ<sup>2</sup><sub>t-1</sub> and Student-t z. "
@@ -256,23 +308,23 @@ story.append(P(
     f"the whole out-of-sample engine with {len(rob) - 1} more seeds.", body))
 
 # ================================================================= 3. RESULTS (a)
-story.append(P("3. Does tail dependence change with the horizon?", h1))
+story.append(P("4. Does tail dependence change with the horizon?", h1))
 rows = [["Series", "Scale", "AIC winner", "t-copula ν", "t-copula λ", "ΔAIC Gaussian", "ΔAIC Clayton"]]
 for s, lab in [("daily", "1 day"), ("H1", "2–8 days"), ("H2", "8–32 days"), ("H3", "> 32 days")]:
     c = cop[cop.series == s].set_index("family")
     rows.append([s if s != "daily" else "Daily residuals", lab, c[c.aic_winner].index[0], f"{c.loc['student','nu']:.1f}",
                  f2(c.loc["student", "lambda_l"]), f"{c.loc['gaussian','delta_aic']:,.0f}", f"{c.loc['clayton','delta_aic']:,.0f}"])
 story.append(table(rows, [2.6, 2.2, 2.2, 2.2, 2.2, 3.0, 3.0]))
-story.append(P("Table 2. Full-likelihood copula fits, 1999–2019. ΔAIC is relative to the winner (larger = worse). "
+story.append(P("Table 3. Full-likelihood copula fits, 1999–2019. ΔAIC is relative to the winner (larger = worse). "
                "The t-copula wins at every scale; its symmetric λ falls at the longest scale.", cap))
 story.append(P(
     f"The t-copula is preferred at every scale by a wide AIC margin, so tails matter. Its tail-dependence coefficient "
     f"is stable from daily data to H2 ({f2(min(tw.loc[k,'lambda_l'] for k in ('daily','H1','H2')))}–"
     f"{f2(max(tw.loc[k,'lambda_l'] for k in ('daily','H1','H2')))}) and drops at H3 "
     f"({f2(tw.loc['H3','lambda_l'])}, ν = {tw.loc['H3','nu']:.0f}). Taken at face value, tail dependence fades at long horizons. "
-    "But a t-copula forces the crash and rally tails to be equal. Figure 1 measures them separately.", body))
+    "But a t-copula forces the crash and rally tails to be equal. Figure 3 measures them separately.", body))
 story.append(fig("fig1_tail_by_horizon.png", 17.0,
-                 "Figure 1. Average pairwise crash (χ<sub>L</sub>) and rally (χ<sub>U</sub>) co-movement with 95% "
+                 "Figure 3. Average pairwise crash (χ<sub>L</sub>) and rally (χ<sub>U</sub>) co-movement with 95% "
                  "bootstrap intervals; bars mark the Gaussian-copula value at the same correlation. (a) wavelet bands "
                  "of GARCH-filtered residuals; (b) non-overlapping raw h-day returns, 1999–2019."))
 trows = [["Test (q = 5%, wavelet bands)", "Estimate [95% CI]", "p-value", "Verdict"]]
@@ -285,7 +337,7 @@ for s in ("H1", "H3"):
     trows.append([f"Crash co-movement above Gaussian, {s}", f"{d['excess_est']:+.3f} [{d['excess_lo']:+.3f}, {d['excess_hi']:+.3f}]",
                   pv(d["excess_p0"]), sig(d["excess_p0"], "above Gaussian", "not distinguishable")])
 story.append(table(trows, [6.2, 4.6, 2.0, 4.6]))
-story.append(P(f"Table 3. Bootstrap tests ({N_BOOT} stationary-bootstrap replications re-running the MODWT).", cap))
+story.append(P(f"Table 4. Bootstrap tests ({N_BOOT} stationary-bootstrap replications re-running the MODWT).", cap))
 story.append(P(
     f"<b>Finding.</b> Crash co-movement does not decline significantly with scale (H3 − H1 = "
     f"{TT['chi_L: H3 - H1']['est']:+.3f}, {pp(TT['chi_L: H3 - H1']['p'])}), while rally co-movement roughly halves "
@@ -301,19 +353,19 @@ for h in (1, 5, 10, 21):
     irows.append([f"{h} day{'s' if h > 1 else ''}", f"{o.est:.3f} [{o.lo:.3f}, {o.hi:.3f}]"] +
                  [f3(imp.loc[h, m]) for m in ("Gaussian", "Student-t", "Empirical (FHS)")])
 story.append(KeepTogether([table(irows, [2.4, 4.4, 3.5, 3.5, 3.6]),
-                           P("Table 4. Crash co-movement of h-day returns (q = 10%): observed vs implied by daily "
+                           P("Table 5. Crash co-movement of h-day returns (q = 10%): observed vs implied by daily "
                              "GARCH + copula models simulated forward (60,000 paths each), 1999–2019.", cap)]))
 story.append(P(
-    f"Table 4 asks whether a model estimated on daily data reproduces this. At one day the Gaussian model implies "
+    f"Table 5 asks whether a model estimated on daily data reproduces this. At one day the Gaussian model implies "
     f"{f3(imp.loc[1,'Gaussian'])} and the t-copula {f3(imp.loc[1,'Student-t'])}, both below the 95% interval of the "
     f"observed {obs.loc[1,'est']:.3f}; only the empirical copula ({f3(imp.loc[1,'Empirical (FHS)'])}) lies inside it. At "
     "longer horizons every model stays below the observed value, though the intervals widen and overlap. <b>Ignoring "
     "tail dependence therefore means understating joint crashes, and the shortfall does not disappear as the "
-    "horizon lengthens.</b> Section 4 measures what that does to VaR and ES.", body))
+    "horizon lengthens.</b> Section 5 measures what that does to VaR and ES.", body))
 
 # ================================================================= 4. RESULTS (b)
-story.append(P("4. What does ignoring it do to measured risk?", h1))
-story.append(P("4.1 One-day risk, out-of-sample 2020–2026", h2))
+story.append(P("5. What does ignoring it do to measured risk?", h1))
+story.append(P("5.1 One-day risk, out-of-sample 2020–2026", h2))
 r1 = [["Model", "99% VaR breaches", "Kupiec p", "Indep. p", "DQ p", "Basel red / yellow", "Mean ES 97.5%",
        "Z2 p", "Breach loss / ES", "FZ0 loss"]]
 for m in ("HS", "FHS", "G", "T", "WT"):
@@ -324,7 +376,7 @@ for m in ("HS", "FHS", "G", "T", "WT"):
                pct(s["mean_es97_5"], 2), pv(s["es97_5"]["p_z2"]), f2(s["es97_5"]["realised_over_predicted"]),
                f3(s["fz0_97_5"])])
 story.append(table(r1, [3.7, 1.9, 1.3, 1.3, 1.2, 1.9, 1.6, 1.2, 1.6, 1.6]))
-story.append(P(f"Table 5. {H['oos_window']['days']:,} out-of-sample days; {expected99:.0f} breaches expected at 99%. "
+story.append(P(f"Table 6. {H['oos_window']['days']:,} out-of-sample days; {expected99:.0f} breaches expected at 99%. "
                "Breach range across Monte Carlo seeds in brackets. Basel shares are the fraction of rolling 250-day "
                "windows in the red (≥ 10) or yellow (5–9) zone. Z2 p: Acerbi–Szekely test of ES 97.5% (small = ES too "
                "low). Breach loss / ES: average realised loss on VaR-breach days ÷ predicted ES. FZ0: lower is better.", cap))
@@ -339,12 +391,12 @@ story.append(P(
     f"{pv(dmk['T_vs_G']['p'])}), while all beat historical simulation decisively (p ≤ "
     f"{pv(max(dmk[k]['p'] for k in ('G_vs_HS','T_vs_HS','WT_vs_HS','FHS_vs_HS')))}): at one day volatility dynamics "
     "dominate and dependence is a second-order, tail-only effect. Using the H1 wavelet band instead of daily residuals "
-    f"(WT) changes little (WT vs t: DM {pp(dmk['WT_vs_T']['p'])}), which is what Section 3 predicts: daily "
+    f"(WT) changes little (WT vs t: DM {pp(dmk['WT_vs_T']['p'])}), which is what Section 4 predicts: daily "
     "dependence is the H1 dependence.", body))
 story.append(P(
     f"<b>What still fails.</b> Breaches cluster: the dynamic-quantile test rejects every model at 99% and "
     f"Christoffersen's independence test every model except filtered HS ({pp(fhs1['var99']['p_ind'])}), driven by "
-    "COVID (Table 6). The McNeil–Frey test finds realised breach losses about "
+    "COVID (Table 7). The McNeil–Frey test finds realised breach losses about "
     f"{pct(min(S1[m]['es97_5']['mf_mean_rel_excess'] for m in ('FHS','G','T','WT')),0)}–"
     f"{pct(max(S1[m]['es97_5']['mf_mean_rel_excess'] for m in ('FHS','G','T','WT')),0)} above predicted ES. A model "
     "re-estimated monthly on four years of data cannot anticipate a regime change of the size of March 2020.", body))
@@ -355,16 +407,16 @@ srows = [["Period", "Days"] + [f"{m} 99% / 95%" for m in ("HS", "FHS", "G", "T",
 for per in ["COVID crash (Feb–Jun 2020)", "2022 rate shock", "Other days"]:
     srows.append([per, str(days[per])] + [f"{sp.loc[per, m]:.1f} / {sp95.loc[per, m]:.1f}" for m in ("HS", "FHS", "G", "T", "WT")])
 story.append(KeepTogether([table(srows, [4.4, 1.2, 2.36, 2.36, 2.36, 2.36, 2.36]),
-                           P("Table 6. Breach rates (%) by sub-period; targets 1% and 5%.", cap)]))
-story.append(fig("fig2_oos_var99.png", 17.0, "Figure 2. Out-of-sample 99% VaR (negative, % of NAV) and daily portfolio "
+                           P("Table 7. Breach rates (%) by sub-period; targets 1% and 5%.", cap)]))
+story.append(fig("fig2_oos_var99.png", 17.0, "Figure 4. Out-of-sample 99% VaR (negative, % of NAV) and daily portfolio "
                  "returns. Panel (b) zooms into the COVID crash; red dots are breaches of the wavelet t-copula VaR."))
-story.append(fig("fig3_traffic_light.png", 17.0, "Figure 3. Rolling 250-day count of 99% VaR breaches against the "
+story.append(fig("fig3_traffic_light.png", 17.0, "Figure 5. Rolling 250-day count of 99% VaR breaches against the "
                  "Basel traffic-light zones."))
 
-story.append(P(f"4.2 {H_DAYS}-day risk: where the horizon matters", h2))
+story.append(P(f"5.2 {H_DAYS}-day risk: where the horizon matters", h2))
 story.append(P(
     f"Regulators and asset managers need multi-day risk (FRTB uses a 10-day base horizon). The usual shortcut is "
-    f"√10 × 1-day risk. Table 7 replaces one simplification at a time on {SH['n_windows']} non-overlapping 10-day "
+    f"√10 × 1-day risk. Table 8 replaces one simplification at a time on {SH['n_windows']} non-overlapping 10-day "
     f"windows, measuring each model's ES 97.5% against the full horizon-aware model, the wavelet empirical copula on the H2 band.", body))
 r10 = [["Model", "Ignores", "Mean ES 97.5%", "vs full model: all / stressed", "Seed range", "99% / 95% breaches",
         "Breach loss / ES", "FZ0 loss"]]
@@ -378,7 +430,7 @@ for m in NAMES_H:
                 "reference" if m == BASE else f"{spct(gap_rng[m][0])} to {spct(gap_rng[m][1])}",
                 f"{s['var99']['hits']} / {s['var95']['hits']}", f2(s["es97_5"]["realised_over_predicted"]), f3(s["fz0_97_5"])])
 story.append(table(r10, [4.0, 3.3, 1.7, 2.6, 2.2, 1.6, 1.4, 1.2]))
-story.append(P(f"Table 7. {SH['n_windows']} non-overlapping 10-day windows, 2020–2026 (expected breaches "
+story.append(P(f"Table 8. {SH['n_windows']} non-overlapping 10-day windows, 2020–2026 (expected breaches "
                f"{SH['G_path']['var99']['expected_hits']:.1f} at 99%, {SH['G_path']['var95']['expected_hits']:.1f} at 95%). "
                "'Stressed' = windows in the top quartile of the full model's ES.", cap))
 story.append(P(
@@ -386,13 +438,13 @@ story.append(P(
     f"{pct(-gaps['G_path'][0])} on average and {pct(-gaps['G_path'][2])} when risk is high, and this model has the "
     f"largest breach losses relative to ES ({f2(SH['G_path']['es97_5']['realised_over_predicted'])}×). (ii) Building "
     f"10-day risk by compounding a daily t-copula still leaves {pct(-gaps['T_path'][0])}: with independent daily "
-    "draws the joint tail is diluted, while Section 3 shows the observed crash tail is not. Imposing the daily "
+    "draws the joint tail is diluted, while Section 4 shows the observed crash tail is not. Imposing the daily "
     f"t-copula directly at the 10-day horizon removes that dilution ({spct(gaps['T_path'][0])} → "
     f"{spct(gaps['T_join'][0])}; the H2-band t-copula gives {spct(gaps['WC'][0])}). (iii) The remaining gap is the shape of the tail: the "
     f"empirical copula, which keeps the crash/rally asymmetry, raises 10-day ES by a further "
     f"{pct(SH['WC_emp']['mean_es97_5'] / SH['WC']['mean_es97_5'] - 1)}. (iv) Estimating the copula on the H2 band "
     f"instead of daily data changes little (daily empirical copula vs full model: {spct(gaps['E_join'][0])}), which "
-    "is what Section 3 predicts: crash co-movement at 8–32 days is statistically the same as at the daily scale. The "
+    "is what Section 4 predicts: crash co-movement at 8–32 days is statistically the same as at the daily scale. The "
     "wavelet analysis is what justifies carrying daily crash dependence to the 10-day horizon. (v) The √10 rule "
     f"({spct(gaps['G_sqrt'][0])}) does better than Gaussian paths only because two errors partly cancel: it ignores "
     f"tail dependence, but scaling a fat-tailed 1-day distribution by √10 overstates the 10-day tail of the same "
@@ -402,11 +454,11 @@ story.append(P(
     f"the only ones whose breach losses are significantly above predicted ES (McNeil–Frey p = "
     f"{pv(SH['G_path']['es97_5']['mf_p'])} and {pv(SH['T_path']['es97_5']['mf_p'])} respectively; full model p = "
     f"{pv(SH[BASE]['es97_5']['mf_p'])}).", body))
-story.append(fig("fig4_es10d.png", 17.0, "Figure 4. 10-day ES 97.5% forecasts and realised 10-day portfolio losses; "
+story.append(fig("fig4_es10d.png", 17.0, "Figure 6. 10-day ES 97.5% forecasts and realised 10-day portfolio losses; "
                  "circled points exceed the full model's VaR 97.5%."))
 
 # ================================================================= 5. RECOMMENDATION
-story.append(P("5. Recommendation for the risk manager", h1))
+story.append(P("6. Recommendation for the risk manager", h1))
 story.append(box([
     P(f"<b>From tomorrow: replace the Gaussian copula and the √10 rule with tail-aware, horizon-matched ES.</b>", boxs),
     P(f"1. <b>Daily limit.</b> Compute 1-day ES 97.5% from the t-copula on daily-updated GARCH margins: "
@@ -426,13 +478,13 @@ story.append(box([
       "overlay.", boxs)], color=ACCENT))
 
 # ================================================================= 6. ROBUSTNESS & LIMITATIONS
-story.append(P("6. Robustness and limitations", h1))
+story.append(P("7. Robustness and limitations", h1))
 story.append(P(
     f"<b>Robustness.</b> Every out-of-sample number was recomputed with {len(rob) - 1} more Monte Carlo seeds "
-    "(ranges in Tables 5 and 7); conclusions do not change. Results are reported at two tail levels (q = 5% and 10%); "
-    "the conclusions hold at both (files in <font face='Courier'>outputs/</font>). Figure 5 shows the rolling t-copula "
+    "(ranges in Tables 6 and 8); conclusions do not change. Results are reported at two tail levels (q = 5% and 10%); "
+    "the conclusions hold at both (files in <font face='Courier'>outputs/</font>). Figure 7 shows the rolling t-copula "
     "tail dependence: it rises in stress (2020, 2022) at every scale, with the H2 band the most variable.", body))
-story.append(fig("fig5_rolling_lambda.png", 15.5, "Figure 5. Rolling t-copula tail dependence by scale "
+story.append(fig("fig5_rolling_lambda.png", 15.5, "Figure 7. Rolling t-copula tail dependence by scale "
                  f"(window {WINDOW} days, re-estimated every {REFIT_EVERY} days)."))
 story.append(P(
     "<b>Limitations.</b> (1) Long-scale bands are highly autocorrelated, so H3 has few effective observations; "
@@ -450,7 +502,7 @@ story.append(P(
 story.append(P("Appendix A. Reproducibility and use of AI tools", h1))
 story.append(P(
     "<b>Reproduce.</b> Everything runs locally with no downloads beyond the Python packages. Either open "
-    "<font face='Courier'>Reproduce.ipynb</font> and choose Run All, or run <font face='Courier'>pip install -r "
+    "<font face='Courier'>QuantEdge_Gmora.ipynb</font> (the full analysis with commentary) and choose Run All, or run <font face='Courier'>pip install -r "
     "requirements.txt</font> followed by <font face='Courier'>python reproduce.py</font>. Both run the unit tests, regenerate every table, figure and number in this report from the cached price file "
     "(<font face='Courier'>data/etf_prices.csv</font>; <font face='Courier'>src/data.py</font> re-downloads it from "
     "Yahoo Finance with <font face='Courier'>force=True</font>) and rebuild this PDF. All randomness is seeded. The "

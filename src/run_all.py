@@ -4,6 +4,7 @@ One-command reproduction for SAIFA Quant Edge 1.0, Round 1: "Risk Across Tails a
     python -m src.run_all          (or: make reproduce)
 
 Stages
+  0. Data loading, exploratory analysis and preprocessing diagnostics.
   1. In-sample (1999–2019): GARCH-t filtering, MODWT-MRA bands, full-likelihood copula fits,
      tail co-movement by scale and by holding horizon with stationary-bootstrap inference.
   2. Out-of-sample (2020–): rolling 1-day VaR/ES for HS, Gaussian, t and wavelet-t copula models;
@@ -26,13 +27,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src import figures
-from src.config import H_DAYS, IN_SAMPLE_END, OUTPUT_DIR, TICKERS
-from src.data import download_prices, log_returns
+from src.config import H_DAYS, IN_SAMPLE_END, OOS_START, OUTPUT_DIR, TICKERS
+from src import eda
+from src.data import download_prices, load_raw, log_returns
 from src.evaluate import summarize_1d, summarize_h
 from src.horizon_analysis import copula_table, model_implied_by_horizon, tail_by_band, tail_by_horizon
 from src.margins import fit_all_margins, std_resid_matrix
 from src.backtest import fz0_loss
 from src.oos import MODELS_1D, MODELS_H, run_oos
+from src.wavelets import decompose
 
 ROBUST_SEEDS = (7, 11, 2026)  # extra Monte Carlo seeds: are model differences larger than simulation noise?
 
@@ -130,18 +133,50 @@ def recommendation(H: dict) -> str:
     )
 
 
-def main() -> None:
-    t0 = time.time()
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    print("== Quant Edge Round 1: tails x timescales ==")
+def stage_data():
+    """Load the bundled prices and compute log returns."""
+    raw = load_raw()
     prices = download_prices()
     rets = log_returns(prices)
     print(f"Data: {prices.index.min().date()} -> {prices.index.max().date()}, {len(prices)} days, {TICKERS}")
+    return raw, prices, rets
 
-    print("[1/3] In-sample horizon analysis (<= 2019)")
+
+def stage_eda(raw, prices, rets) -> dict:
+    """Exploratory analysis and preprocessing diagnostics (estimation sample <= 2019)."""
     ris = rets.loc[:IN_SAMPLE_END]
-    fits_is = fit_all_margins(ris)
-    z = std_resid_matrix(fits_is)
+    port = np.log1p(np.expm1(ris).mean(axis=1)).rename("Portfolio")
+    fits = fit_all_margins(ris)
+    z = std_resid_matrix(fits)
+    out = {
+        "quality": eda.data_quality(raw[TICKERS], prices),
+        "stats": eda.return_stats(ris.join(port)),
+        "corr": ris.corr(),
+        "co_extremes": eda.co_extremes(ris),
+        "garch": eda.garch_diagnostics(fits),
+        "energy": eda.wavelet_energy(z),
+    }
+    for k, df in out.items():
+        df.to_csv(OUTPUT_DIR / f"eda_{k}.csv")
+    avg_corr = eda.rolling_avg_corr(rets)
+    figures.fig_data_overview(rets, avg_corr, OOS_START)
+    figures.fig_diagnostics(port, ris, z, eda.acf)
+    bands = {b: pd.Series(v[:, 0], index=z.index) for b, v in decompose(z[["XLF"]], trim=False).items()}
+    figures.fig_wavelet_example(z["XLF"], bands, "2007-01-01", "2009-12-31")
+    vol = (np.expm1(rets).mean(axis=1).rolling(250).std() * np.sqrt(252)).reindex(avg_corr.index)
+    ok = avg_corr.notna() & vol.notna()
+    out["corr_vol_link"] = float(np.corrcoef(avg_corr[ok], vol[ok])[0, 1])
+    out["avg_corr_range"] = (float(avg_corr.min()), float(avg_corr.max()))
+    out["summary"] = {"duplicate_dates": out["quality"].attrs.get("duplicate_dates", 0),
+                      "rows_dropped_by_alignment": out["quality"].attrs.get("rows_dropped_by_alignment", 0),
+                      "corr_vol_link": out["corr_vol_link"], "avg_corr_min": out["avg_corr_range"][0],
+                      "avg_corr_max": out["avg_corr_range"][1]}
+    out["fits"], out["z"], out["ris"] = fits, z, ris
+    return out
+
+
+def stage_horizon(ris, fits_is, z) -> dict:
+    """Part (a): copula fits and tail co-movement by scale and by horizon."""
     cop = copula_table(z)
     cop.to_csv(OUTPUT_DIR / "insample_copula_fits.csv", index=False)
     band_lv, band_ts = tail_by_band(z)
@@ -152,40 +187,62 @@ def main() -> None:
     hor_ts.to_csv(OUTPUT_DIR / "tail_tests_by_horizon.csv", index=False)
     implied = model_implied_by_horizon(ris, fits_is)
     implied.to_csv(OUTPUT_DIR / "model_implied_tail_by_horizon.csv", index=False)
-    print(cop[cop.aic_winner].round(3).to_string(index=False))
+    figures.fig_tail(band_lv, hor_lv, 0.05, 0.10)
+    return {"cop": cop, "band_lv": band_lv, "band_ts": band_ts, "hor_lv": hor_lv, "hor_ts": hor_ts,
+            "implied": implied}
 
-    print("[2/3] Rolling out-of-sample forecasts (2020 ->)")
+
+def stage_oos(rets) -> dict:
+    """Part (b): rolling out-of-sample 1-day and 10-day forecasts."""
     d1, dh, rf = run_oos(rets)
     d1.to_csv(OUTPUT_DIR / "oos_1d_forecasts.csv")
     dh.to_csv(OUTPUT_DIR / f"oos_{H_DAYS}d_forecasts.csv")
     rf.to_csv(OUTPUT_DIR / "refit_log.csv")
+    return {"d1": d1, "dh": dh, "rf": rf}
 
-    print("[3/3] Backtests, figures, recommendation")
+
+def stage_evaluate(prices, rets, hz: dict, oo: dict, eda_summary: dict | None = None, robustness: bool = True) -> dict:
+    """Backtests, figures, seed robustness, results.json and the desk recommendation."""
+    d1, dh, rf = oo["d1"], oo["dh"], oo["rf"]
     s1, sub = summarize_1d(d1)
     sh = summarize_h(dh)
     sub.to_csv(OUTPUT_DIR / "subperiod_hit_rates.csv", index=False)
-    H = _jsonable(headline(prices, cop, band_lv, band_ts, hor_lv, hor_ts, s1, sh, d1, dh))
-    (OUTPUT_DIR / "results.json").write_text(json.dumps(H, indent=2))
-
-    figures.fig_tail(band_lv, hor_lv, 0.05, 0.10)
+    H = _jsonable(headline(prices, hz["cop"], hz["band_lv"], hz["band_ts"], hz["hor_lv"], hz["hor_ts"], s1, sh, d1, dh))
+    H["eda"] = _jsonable(eda_summary or {})
     figures.fig_oos_1d(d1)
     figures.fig_traffic(d1)
     figures.fig_10d(dh)
     figures.fig_refits(rf)
-
-    print("Monte Carlo seed robustness (re-runs the OOS engine with other seeds)")
-    rows = [seed_row(d1, dh, "main")]
-    for sd in ROBUST_SEEDS:
-        a, b, _ = run_oos(rets, seed=sd, verbose=False)
-        rows.append(seed_row(a, b, sd))
-    rob = pd.DataFrame(rows)
-    rob.to_csv(OUTPUT_DIR / "seed_robustness.csv", index=False)
-    H["seed_robustness"] = _jsonable(rob.drop(columns="seed").agg(["min", "max"]).to_dict())
+    if robustness:
+        print("Monte Carlo seed robustness (re-runs the OOS engine with other seeds)")
+        rows = [seed_row(d1, dh, "main")]
+        for sd in ROBUST_SEEDS:
+            a, b, _ = run_oos(rets, seed=sd, verbose=False)
+            rows.append(seed_row(a, b, sd))
+        rob = pd.DataFrame(rows)
+        rob.to_csv(OUTPUT_DIR / "seed_robustness.csv", index=False)
+        H["seed_robustness"] = _jsonable(rob.drop(columns="seed").agg(["min", "max"]).to_dict())
     (OUTPUT_DIR / "results.json").write_text(json.dumps(H, indent=2))
-
     rec = recommendation(H)
     (OUTPUT_DIR / "manager_recommendation.txt").write_text(rec)
-    print("\n" + rec)
+    return {"H": H, "sub": sub, "rec": rec}
+
+
+def main() -> None:
+    t0 = time.time()
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    print("== Quant Edge Round 1: tails x timescales ==")
+    raw, prices, rets = stage_data()
+    print("[1/4] Exploratory analysis and preprocessing diagnostics")
+    ed = stage_eda(raw, prices, rets)
+    print("[2/4] In-sample horizon analysis (<= 2019)")
+    hz = stage_horizon(ed["ris"], ed["fits"], ed["z"])
+    print(hz["cop"][hz["cop"].aic_winner].round(3).to_string(index=False))
+    print("[3/4] Rolling out-of-sample forecasts (2020 ->)")
+    oo = stage_oos(rets)
+    print("[4/4] Backtests, figures, recommendation")
+    ev = stage_evaluate(prices, rets, hz, oo, ed["summary"])
+    print("\n" + ev["rec"])
     print(f"Done in {time.time() - t0:.0f}s. Outputs in {OUTPUT_DIR}")
 
 

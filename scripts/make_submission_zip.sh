@@ -8,10 +8,10 @@ mkdir -p submission
 rm -f "$OUT"
 
 zip -r "$OUT" \
-  README.md requirements.txt requirements-lock.txt Makefile pytest.ini reproduce.py Reproduce.ipynb \
+  README.md requirements.txt requirements-lock.txt Makefile pytest.ini reproduce.py QuantEdge_Gmora.ipynb \
   src tests scripts/build_report_pdf.py scripts/make_submission_zip.sh \
   report/QuantEdge_Round1_Report.pdf report/assets/fig*.png \
-  outputs/results.json outputs/manager_recommendation.txt \
+  outputs/results.json outputs/manager_recommendation.txt outputs/eda_*.csv \
   outputs/insample_copula_fits.csv \
   outputs/tail_comovement_by_band.csv outputs/tail_tests_by_band.csv \
   outputs/tail_comovement_by_horizon.csv outputs/tail_tests_by_horizon.csv \
