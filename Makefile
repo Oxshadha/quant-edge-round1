@@ -3,7 +3,8 @@
 PY := .venv/bin/python
 
 # One command: install pinned deps, run tests, regenerate every number/figure, rebuild the PDF.
-reproduce: install test pipeline report
+reproduce: install
+	$(PY) reproduce.py
 
 install:
 	python3 -m venv .venv

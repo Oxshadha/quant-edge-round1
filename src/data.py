@@ -41,5 +41,10 @@ def download_prices(force: bool = False) -> pd.DataFrame:
     return px[TICKERS]
 
 
+def load_raw() -> pd.DataFrame:
+    """The bundled price file exactly as stored (all tickers, before any cleaning)."""
+    return pd.read_csv(DATA_DIR / "etf_prices.csv", index_col=0, parse_dates=True)
+
+
 def log_returns(prices: pd.DataFrame) -> pd.DataFrame:
     return np.log(prices / prices.shift(1)).dropna(how="any")
