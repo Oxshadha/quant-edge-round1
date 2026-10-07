@@ -1,4 +1,6 @@
-# SAIFA Quant Edge 1.0, Round 1: Risk Across Tails and Timescales (Team Gmora)
+# SAIFA Quant Edge 1.0, Round 1: Risk Across Tails and Timescales
+
+**Team Gmora** · Tracking code **SAIFA-2026-75323CFE**
 
 **Question.** Does tail dependence change with the investment horizon, and what does ignoring this do to a
 portfolio's measured risk?

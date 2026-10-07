@@ -27,6 +27,7 @@ PDF = ROOT / "report" / "QuantEdge_Round1_Report.pdf"
 
 # ---- cover details ---------------------------------------------------------------------------------
 TEAM_NAME = "Gmora"
+TRACKING_CODE = "SAIFA-2026-75323CFE"
 SUBMISSION_DATE = "8 October 2026"
 # ---------------------------------------------------------------------------------------------------
 
@@ -130,7 +131,7 @@ def footer(canvas, doc):
     canvas.saveState()
     canvas.setFont("Helvetica", 7.5)
     canvas.setFillColor(MUTED)
-    canvas.drawString(1.8 * cm, 1.0 * cm, f"SAIFA Quant Edge 1.0 · Round 1 · {TEAM_NAME}")
+    canvas.drawString(1.8 * cm, 1.0 * cm, f"SAIFA Quant Edge 1.0 · Round 1 · Team {TEAM_NAME} · {TRACKING_CODE}")
     canvas.drawRightString(A4[0] - 1.8 * cm, 1.0 * cm, f"Page {doc.page - 1}")
     canvas.restoreState()
 
@@ -163,7 +164,7 @@ story += [Spacer(1, 3.2 * cm), P("SAIFA QUANT EDGE 1.0 · ROUND 1", ParagraphSty
           Spacer(1, 0.8 * cm),
           P("A wavelet–copula market-risk framework for an equal-weight portfolio of six US sector ETFs<br/>"
             "(XLE · XLF · XLK · XLV · XLI · XLU), daily data 1999–2026, out-of-sample 2020–2026", cover),
-          Spacer(1, 2.4 * cm), P(f"<b>Team {TEAM_NAME}</b><br/>{SUBMISSION_DATE}", cover),
+          Spacer(1, 2.4 * cm), P(f"<b>Team {TEAM_NAME}</b><br/>Tracking code: {TRACKING_CODE}<br/>{SUBMISSION_DATE}", cover),
           Spacer(1, 2.0 * cm),
           P("Reproduce every number and figure with one command: <font face='Courier'>python reproduce.py</font>", cover),
           PageBreak()]
