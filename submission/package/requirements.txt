@@ -1,0 +1,8 @@
+# Python 3.10 - 3.13
+numpy>=1.26,<3
+pandas>=2.1,<4
+scipy>=1.11,<2
+arch>=7.0,<9
+PyWavelets>=1.5
+matplotlib>=3.8
+yfinance>=0.2.40
