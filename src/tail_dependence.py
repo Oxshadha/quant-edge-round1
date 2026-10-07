@@ -32,7 +32,7 @@ def chi_avg(x: np.ndarray, q: float) -> tuple[float, float]:
 
 
 def gaussian_chi(rho: float, q: float) -> float:
-    """C_Gauss(q,q;rho)/q — the co-crash probability a Gaussian copula implies at level q."""
+    """C_Gauss(q,q;rho)/q: the co-crash probability a Gaussian copula implies at level q."""
     z = stats.norm.ppf(q)
     cdf = stats.multivariate_normal(mean=[0, 0], cov=[[1, rho], [rho, 1]]).cdf([z, z])
     return float(cdf / q)

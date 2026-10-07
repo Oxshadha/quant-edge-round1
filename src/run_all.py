@@ -1,5 +1,5 @@
 """
-One-command reproduction for SAIFA Quant Edge 1.0, Round 1 — "Risk Across Tails and Timescales".
+One-command reproduction for SAIFA Quant Edge 1.0, Round 1: "Risk Across Tails and Timescales".
 
     python -m src.run_all          (or: make reproduce)
 
@@ -89,7 +89,7 @@ def headline(prices, cop, band_lv, band_ts, hor_lv, hor_ts, s1, sh, d1, dh) -> d
         "latest": {
             "date": str(d1.index.max().date()),
             **{f"{k}_{m}": float(d1[f"{k}_{m}"].iloc[-1]) for m in ("HS", "G", "T", "WT") for k in ("var99", "es97_5")},
-            **{f"es97_5_10d_{m}": float(dh[f"es97_5_{m}"].iloc[-1]) for m in ("G_sqrt", "G_path", "T_path", "WC")},
+            **{f"es97_5_10d_{m}": float(dh[f"es97_5_{m}"].iloc[-1]) for m in MODELS_H},
         },
     }
 
@@ -108,33 +108,26 @@ def seed_row(d1: pd.DataFrame, dh: pd.DataFrame, seed) -> dict:
 
 
 def recommendation(H: dict) -> str:
-    s1, sh = H["oos_1d"], H["oos_10d"]
+    s1, sh, lat, t = H["oos_1d"], H["oos_10d"], H["latest"], H["tail_band_q05"]
+    g, tc, full = s1["G"], s1["T"], "WC_emp"
     gap = sh["es_gap_vs_WC"]
-    tl = {m: s1[m]["traffic_light"] for m in ("HS", "G", "T", "WT")}
-    best = min(("HS", "G", "T", "WT"), key=lambda m: s1[m]["fz0_97_5"])
-    lat = H["latest"]
-    t = H["tail_band_q05"]
-    txt = (
+    rel = lambda m: (1 + gap[m]["all"]) / (1 + gap[full]["all"]) - 1  # noqa: E731  (gaps are stored vs WC)
+    return (
         "DESK RECOMMENDATION (equal-weight US sector ETF book: XLE XLF XLK XLV XLI XLU)\n\n"
-        f"Action for tomorrow: replace the Gaussian-copula daily 99% VaR / 97.5% ES with the {best}-model "
-        f"(t-copula dependence, daily-updated GARCH volatility), and stop scaling 1-day risk by sqrt(10).\n"
-        f"  - Daily limit: 97.5% ES today = {100 * lat[f'es97_5_{best}']:.2f}% of NAV "
-        f"(Gaussian: {100 * lat['es97_5_G']:.2f}%).\n"
-        f"  - 10-day ES 97.5% today = {100 * lat['es97_5_10d_WC']:.2f}% (wavelet-copula) vs "
-        f"{100 * lat['es97_5_10d_G_sqrt']:.2f}% from Gaussian x sqrt(10).\n"
-        f"Evidence (out-of-sample {H['oos_window']['start']} to {H['oos_window']['end']}):\n"
-        f"  - 99% VaR exceptions: {best} {s1[best]['var99']['hits']} vs Gaussian {s1['G']['var99']['hits']} "
-        f"(expected {s1['G']['var99']['expected_hits']:.0f}); Basel red-zone share of 250-day windows: "
-        f"{best} {100 * tl[best]['red_share']:.0f}% vs Gaussian {100 * tl['G']['red_share']:.0f}%.\n"
-        f"  - Crash co-movement does not fade with horizon (chi_L H1 {t['H1_L']['est']:.2f} -> H3 {t['H3_L']['est']:.2f}) "
-        f"while rally co-movement does (chi_U {t['H1_U']['est']:.2f} -> {t['H3_U']['est']:.2f}); diversification "
-        f"that looks fine on up-days is not there on down-days at any horizon.\n"
-        f"  - 10-day ES: Gaussian x sqrt(10) differs from the wavelet-copula by {100 * gap['G_sqrt']['all']:+.0f}% on average "
-        f"({100 * gap['G_sqrt']['calm']:+.0f}% in calm, {100 * gap['G_sqrt']['stressed']:+.0f}% in stressed windows).\n"
-        "Review trigger: escalate if the 250-day count of 99% exceptions reaches 5 (Basel yellow).\n"
-        "Governance: internal risk overlay; regulatory capital model unchanged until independent validation.\n"
+        "From tomorrow: replace the Gaussian copula and the sqrt(10) rule with tail-aware, horizon-matched ES.\n"
+        f"1. Daily limit: 1-day ES 97.5% from the t-copula on daily-updated GARCH margins = {100 * lat['es97_5_T']:.2f}% "
+        f"of NAV today (Gaussian copula: {100 * lat['es97_5_G']:.2f}%). Out-of-sample {H['oos_window']['start']} to "
+        f"{H['oos_window']['end']}: Gaussian 99% VaR breaches {g['var99']['hits']} vs {g['var99']['expected_hits']:.0f} "
+        f"expected (t-copula {tc['var99']['hits']}).\n"
+        f"2. 10-day limit: ES 97.5% from the wavelet empirical-copula model = {100 * lat['es97_5_10d_' + full]:.2f}% today "
+        f"(sqrt(10) x Gaussian {100 * lat['es97_5_10d_G_sqrt']:.2f}%, Gaussian paths {100 * lat['es97_5_10d_G_path']:.2f}%). "
+        f"On average the Gaussian path model sits {100 * -rel('G_path'):.0f}% below it.\n"
+        f"3. Diversification: crash co-movement does not fade with horizon (chi_L {t['H1_L']['est']:.2f} at 2-8 days, "
+        f"{t['H3_L']['est']:.2f} beyond 32 days) while rally co-movement does ({t['H1_U']['est']:.2f} -> "
+        f"{t['H3_U']['est']:.2f}). Do not rely on sector rotation as a crash hedge.\n"
+        "4. Trigger: escalate when the 250-day count of 99% breaches reaches 5 (Basel yellow). Internal overlay; "
+        "regulatory capital model unchanged until independent validation.\n"
     )
-    return txt
 
 
 def main() -> None:

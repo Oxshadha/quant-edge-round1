@@ -1,4 +1,4 @@
-# SAIFA Quant Edge 1.0 — Round 1: Risk Across Tails and Timescales
+# SAIFA Quant Edge 1.0, Round 1: Risk Across Tails and Timescales (Team Gmora)
 
 **Question.** Does tail dependence change with the investment horizon, and what does ignoring this do to a
 portfolio's measured risk?
@@ -67,6 +67,9 @@ To refresh from Yahoo: `python -c "from src.data import download_prices; downloa
 
 ## AI disclosure
 
-AI assistants (Anthropic Claude) were used for literature search, code drafting and debugging, an independent
-code review, and drafting text. The team chose the question, data, models and tests, verified every result, and
-is responsible for every line of code and every claim. See Appendix A of the report.
+All cognitive and statistical work was done by Team Gmora: the research question, portfolio, data and sample
+split, the choice of margin, wavelet and copula models, the design of the out-of-sample experiments and
+validation tests, the interpretation of results and the recommendation. AI assistants (Anthropic Claude) were used
+as tools under the team's direction for literature search, writing and debugging code, reviewing code for errors,
+and editing text. The team checked every result and can explain every line of code and every claim.
+See Appendix A of the report.

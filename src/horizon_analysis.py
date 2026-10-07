@@ -1,8 +1,8 @@
 """Part (a): does tail dependence change with the investment horizon?  (estimation sample <= 2019)
 
 Two complementary views, both with stationary-bootstrap confidence intervals:
-1. Scale view  — MODWT-MRA bands H1/H2/H3 of GARCH-filtered residuals (volatility clustering removed).
-2. Return view — non-overlapping 1/5/10/21-day returns, i.e. what a holder at that horizon experiences.
+1. Scale view:  MODWT-MRA bands H1/H2/H3 of GARCH-filtered residuals (volatility clustering removed).
+2. Return view: non-overlapping 1/5/10/21-day returns, i.e. what a holder at that horizon experiences.
 """
 
 from __future__ import annotations

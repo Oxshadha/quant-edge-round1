@@ -11,7 +11,7 @@ daily with realised returns (no re-estimation), so forecasts react to volatility
   T     Student-t copula on daily residuals             (tail dependence, single horizon)
   WT    Student-t copula on the H1 wavelet band         (tail dependence at the 2–8 day scale)
 
-10-day models (buy-and-hold, non-overlapping windows) — isolate each simplification in turn:
+10-day models (buy-and-hold, non-overlapping windows), isolating each simplification in turn:
   G_sqrt   Gaussian 1-day VaR/ES x sqrt(10)               (ignores horizon AND tails: desk shortcut)
   G_path   Gaussian copula, simulated 10-day GARCH paths    (ignores tails)
   T_path   t copula on daily data, simulated paths          (tails, but daily dependence aggregated)

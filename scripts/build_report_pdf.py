@@ -25,9 +25,8 @@ from src.config import H_DAYS, N_BOOT, N_SIM, N_SIM_H, REFIT_EVERY, WINDOW  # no
 OUT, ASSETS = ROOT / "outputs", ROOT / "report" / "assets"
 PDF = ROOT / "report" / "QuantEdge_Round1_Report.pdf"
 
-# ---- fill these in before submitting -------------------------------------------------------------
-TEAM_NAME = "[Team name]"
-TRACKING_CODE = "[Tracking code]"
+# ---- cover details ---------------------------------------------------------------------------------
+TEAM_NAME = "Gmora"
 SUBMISSION_DATE = "8 October 2026"
 # ---------------------------------------------------------------------------------------------------
 
@@ -48,6 +47,7 @@ def f3(x): return f"{x:.3f}"
 def pct(x, d=1): return f"{100 * x:.{d}f}%"
 def spct(x, d=1): return f"{100 * x:+.{d}f}%"
 def pv(p): return "&lt;0.001" if p < 0.001 else f"{p:.3f}"
+def pp(p): return "p &lt; 0.001" if p < 0.001 else f"p = {p:.3f}"
 def ci(d): return f"{d['est']:.2f} [{d['lo']:.2f}, {d['hi']:.2f}]"
 def sig(p, yes="significant", no="not significant"): return yes if p < 0.05 else no
 
@@ -131,7 +131,8 @@ def footer(canvas, doc):
 
 
 # ---------------------------------------------------------------- derived numbers
-lat = H["latest"]
+lat = dict(H["latest"])
+lat.update({f"es97_5_10d_{m}": float(dh[f"es97_5_{m}"].iloc[-1]) for m in NAMES_H})
 g1, t1, wt1, fhs1, hs1 = (S1[m] for m in ("G", "T", "WT", "FHS", "HS"))
 es1_gap_t = g1["mean_es97_5"] / t1["mean_es97_5"] - 1
 es1_gap_f = g1["mean_es97_5"] / fhs1["mean_es97_5"] - 1
@@ -145,17 +146,19 @@ tw = cop[cop.aic_winner].set_index("series")
 imp = implied[implied.q == 0.10].pivot(index="horizon_days", columns="model", values="chi_L")
 obs = hor[(hor.q == 0.10) & (hor["tail"] == "L")].set_index("horizon_days")
 expected99 = g1["var99"]["expected_hits"]
+sqrt_ratio = dh["es97_5_G_sqrt"] / dh[f"es97_5_{BASE}"]
+sqrt_below, sqrt_worst = float((sqrt_ratio < 1).mean()), float(1 - sqrt_ratio.min())
+sqrt_vs_path = float((dh["es97_5_G_sqrt"] / dh["es97_5_G_path"]).mean() - 1)
 
 story = []
 # ================================================================= COVER (excluded from page limit)
 story += [Spacer(1, 3.2 * cm), P("SAIFA QUANT EDGE 1.0 · ROUND 1", ParagraphStyle("k", parent=cover, textColor=MUTED, fontSize=10)),
           Spacer(1, 0.4 * cm), P("Risk Across Tails and Timescales", title), Spacer(1, 0.3 * cm),
-          P("Does crash co-movement fade with the investment horizon — and what does ignoring it do to measured risk?", cover),
+          P("Does crash co-movement fade with the investment horizon, and what does ignoring it do to measured risk?", cover),
           Spacer(1, 0.8 * cm),
           P("A wavelet–copula market-risk framework for an equal-weight portfolio of six US sector ETFs<br/>"
             "(XLE · XLF · XLK · XLV · XLI · XLU), daily data 1999–2026, out-of-sample 2020–2026", cover),
-          Spacer(1, 2.4 * cm), P(f"<b>Team:</b> {TEAM_NAME}<br/><b>Tracking code:</b> {TRACKING_CODE}<br/>"
-                                 f"<b>Submitted:</b> {SUBMISSION_DATE}", cover),
+          Spacer(1, 2.4 * cm), P(f"<b>Team {TEAM_NAME}</b><br/>{SUBMISSION_DATE}", cover),
           Spacer(1, 2.0 * cm),
           P("Reproduce every number and figure with one command: <font face='Courier'>make reproduce</font>", cover),
           PageBreak()]
@@ -165,17 +168,17 @@ story.append(P("Executive summary", h1))
 story.append(box([
     P("<b>Question.</b> Does tail dependence between US equity sectors change with the investment horizon, and what "
       "does ignoring that do to a portfolio's measured risk?", boxs),
-    P(f"<b>Answer (a) — the crash tail does not fade, the rally tail does.</b> Using a MODWT wavelet decomposition of "
+    P(f"<b>Answer (a): the crash tail does not fade, the rally tail does.</b> Using a MODWT wavelet decomposition of "
       f"GARCH-filtered returns (1999–2019), the probability that two sectors crash together (χ<sub>L</sub>, q = 5%) is "
-      f"{f2(T['H1_L']['est'])} at the 2–8 day scale and {f2(T['H3_L']['est'])} beyond 32 days — a change of "
-      f"{TT['chi_L: H3 - H1']['est']:+.2f} that is {sig(TT['chi_L: H3 - H1']['p'])} (p = {pv(TT['chi_L: H3 - H1']['p'])}). "
-      f"Rally co-movement falls from {f2(T['H1_U']['est'])} to {f2(T['H3_U']['est'])} (p = {pv(TT['chi_U: H3 - H1']['p'])}). "
+      f"{f2(T['H1_L']['est'])} at the 2–8 day scale and {f2(T['H3_L']['est'])} beyond 32 days, a change of "
+      f"{TT['chi_L: H3 - H1']['est']:+.2f} that is {sig(TT['chi_L: H3 - H1']['p'])} ({pp(TT['chi_L: H3 - H1']['p'])}). "
+      f"Rally co-movement falls from {f2(T['H1_U']['est'])} to {f2(T['H3_U']['est'])} ({pp(TT['chi_U: H3 - H1']['p'])}). "
       f"So dependence becomes <i>asymmetric</i> at long horizons, and at every scale crash co-movement exceeds what a "
       f"Gaussian copula implies (by {T['H1_L']['excess_est']:+.2f} to {T['daily_L']['excess_est']:+.2f}). A symmetric "
       f"t-copula reads the fading rally tail as fading tail dependence (λ {f2(tw.loc['H1','lambda_l'])} → "
       f"{f2(tw.loc['H3','lambda_l'])}) and would understate long-horizon crash risk.", boxs),
-    P(f"<b>Answer (b) — ignoring it understates risk, most at multi-day horizons.</b> Out-of-sample "
-      f"({H['oos_window']['start'][:4]}–{H['oos_window']['end'][:4]}, {H['oos_window']['days']} days), the Gaussian-copula "
+    P(f"<b>Answer (b): ignoring it understates risk, most at multi-day horizons.</b> Out-of-sample "
+      f"({H['oos_window']['start'][:4]}–{H['oos_window']['end'][:4]}, {H['oos_window']['days']:,} days), the Gaussian-copula "
       f"benchmark gives {g1['var99']['hits']} breaches of 99% VaR against {expected99:.0f} expected (t-copula: "
       f"{t1['var99']['hits']}) and a daily ES 97.5% {pct(-es1_gap_t)} lower than the t-copula. At the {H_DAYS}-day "
       f"horizon the Gaussian path model's ES 97.5% is {pct(-gaps['G_path'][0])} below the horizon-aware wavelet "
@@ -184,17 +187,17 @@ story.append(box([
       f"simulation (Diebold–Mariano p ≤ {pv(max(S1['dm_fz0_97_5'][k]['p'] for k in ('G_vs_HS','T_vs_HS','WT_vs_HS')))}).", boxs),
     P(f"<b>Recommendation.</b> Replace the Gaussian copula with a t-copula on daily-updated GARCH margins for the "
       f"daily limit, and set the {H_DAYS}-day ES from the horizon-matched wavelet model instead of √10 × 1-day: "
-      f"today that is {pct(lat['es97_5_10d_' + BASE] if 'es97_5_10d_' + BASE in lat else lat['es97_5_10d_WC'], 2)} "
-      f"of NAV. Details in Section 5.", boxs)]))
+      f"today that is {pct(lat['es97_5_10d_' + BASE], 2)} "
+      f"of NAV. Over 2020–2026 the √10 shortcut sat below this model in {pct(sqrt_below, 0)} of windows. "
+      f"Details in Section 5.", boxs)]))
 story.append(Spacer(1, 6))
 
 # ================================================================= 1. DESIGN
 story.append(P("1. Design choices and why", h1))
-story.append(P("The brief leaves every choice to us; Table 1 lists each one with the reason and the alternative we "
-               "rejected. The guiding principle is that each component should answer one part of the question and "
-               "be testable out-of-sample against something simpler.", body))
+story.append(P("Table 1 sets out each design choice, the reason for it and the alternative considered. Each component "
+               "answers one part of the question and is tested out of sample against a simpler alternative.", body))
 design = [
-    ["Choice", "What we use", "Why", "Rejected alternative"],
+    ["Choice", "Specification", "Rationale", "Alternative considered"],
     ["Portfolio", "Equal weight, 6 Select Sector SPDRs", "Sectors are where diversification is supposed to come from; "
      "equal weight keeps the result about dependence, not weights", "Adding SPY: it contains the sectors and double-counts beta"],
     ["Market & data", f"US, Yahoo Finance adjusted closes, {H['data']['start']} to {H['data']['end']} ({H['data']['n_days']} days)",
@@ -264,8 +267,9 @@ story.append(P("Table 2. Full-likelihood copula fits, 1999–2019. ΔAIC is rela
                "The t-copula wins at every scale; its symmetric λ falls at the longest scale.", cap))
 story.append(P(
     f"The t-copula is preferred at every scale by a wide AIC margin, so tails matter. Its tail-dependence coefficient "
-    f"is stable from daily data to H2 ({f2(tw.loc['daily','lambda_l'])}–{f2(tw.loc['H2','lambda_l'])}) and drops at H3 "
-    f"({f2(tw.loc['H3','lambda_l'])}, ν = {tw.loc['H3','nu']:.0f}). Read naively, tail dependence fades at long horizons. "
+    f"is stable from daily data to H2 ({f2(min(tw.loc[k,'lambda_l'] for k in ('daily','H1','H2')))}–"
+    f"{f2(max(tw.loc[k,'lambda_l'] for k in ('daily','H1','H2')))}) and drops at H3 "
+    f"({f2(tw.loc['H3','lambda_l'])}, ν = {tw.loc['H3','nu']:.0f}). Taken at face value, tail dependence fades at long horizons. "
     "But a t-copula forces the crash and rally tails to be equal. Figure 1 measures them separately.", body))
 story.append(fig("fig1_tail_by_horizon.png", 17.0,
                  "Figure 1. Average pairwise crash (χ<sub>L</sub>) and rally (χ<sub>U</sub>) co-movement with 95% "
@@ -284,13 +288,13 @@ story.append(table(trows, [6.2, 4.6, 2.0, 4.6]))
 story.append(P(f"Table 3. Bootstrap tests ({N_BOOT} stationary-bootstrap replications re-running the MODWT).", cap))
 story.append(P(
     f"<b>Finding.</b> Crash co-movement does not decline significantly with scale (H3 − H1 = "
-    f"{TT['chi_L: H3 - H1']['est']:+.3f}, p = {pv(TT['chi_L: H3 - H1']['p'])}), while rally co-movement roughly halves "
-    f"(p = {pv(TT['chi_U: H3 - H1']['p'])}). At short scales the two tails are symmetric; beyond a month crash "
-    f"co-movement exceeds rally co-movement by {TT['H3: chi_L - chi_U']['est']:.2f} (p = {pv(TT['H3: chi_L - chi_U']['p'])}). "
+    f"{TT['chi_L: H3 - H1']['est']:+.3f}, {pp(TT['chi_L: H3 - H1']['p'])}), while rally co-movement roughly halves "
+    f"({pp(TT['chi_U: H3 - H1']['p'])}). At short scales the two tails are symmetric; beyond a month crash "
+    f"co-movement exceeds rally co-movement by {TT['H3: chi_L - chi_U']['est']:.2f} ({pp(TT['H3: chi_L - chi_U']['p'])}). "
     "This is the long-horizon version of the asymmetric correlation found by Longin & Solnik (2001) and Ang & Chen "
     "(2002): sectors rally separately but fall together, and that remains true when the holding period lengthens. "
-    f"In raw h-day returns (panel b) the picture is noisier — only {int(obs.loc[21,'n_obs'])} independent 21-day "
-    "observations exist — but crash co-movement stays above the Gaussian level up to 10 days.", body))
+    f"In raw h-day returns (panel b) the picture is noisier (only {int(obs.loc[21,'n_obs'])} independent 21-day "
+    "observations exist), but crash co-movement stays above the Gaussian level up to 10 days.", body))
 irows = [["Horizon", "Observed χ<sub>L</sub> [95% CI]"] + [f"{m} model" for m in ("Gaussian", "Student-t", "Empirical (FHS)")]]
 for h in (1, 5, 10, 21):
     o = obs.loc[h]
@@ -300,11 +304,12 @@ story.append(KeepTogether([table(irows, [2.4, 4.4, 3.5, 3.5, 3.6]),
                            P("Table 4. Crash co-movement of h-day returns (q = 10%): observed vs implied by daily "
                              "GARCH + copula models simulated forward (60,000 paths each), 1999–2019.", cap)]))
 story.append(P(
-    f"Table 4 asks whether a model estimated on daily data reproduces this. The daily Gaussian model implies "
-    f"{f3(imp.loc[1,'Gaussian'])} at one day against {obs.loc[1,'est']:.3f} observed: it misses the crash tail from the "
-    "start, and the gap persists at longer horizons. The t-copula closes part of the gap and the empirical copula "
-    "most of it. <b>Ignoring tail dependence therefore means understating joint crashes at every horizon.</b> Section 4 "
-    "measures what that does to VaR and ES.", body))
+    f"Table 4 asks whether a model estimated on daily data reproduces this. At one day the Gaussian model implies "
+    f"{f3(imp.loc[1,'Gaussian'])} and the t-copula {f3(imp.loc[1,'Student-t'])}, both below the 95% interval of the "
+    f"observed {obs.loc[1,'est']:.3f}; only the empirical copula ({f3(imp.loc[1,'Empirical (FHS)'])}) lies inside it. At "
+    "longer horizons every model stays below the observed value, though the intervals widen and overlap. <b>Ignoring "
+    "tail dependence therefore means understating joint crashes, and the shortfall does not disappear as the "
+    "horizon lengthens.</b> Section 4 measures what that does to VaR and ES.", body))
 
 # ================================================================= 4. RESULTS (b)
 story.append(P("4. What does ignoring it do to measured risk?", h1))
@@ -319,7 +324,7 @@ for m in ("HS", "FHS", "G", "T", "WT"):
                pct(s["mean_es97_5"], 2), pv(s["es97_5"]["p_z2"]), f2(s["es97_5"]["realised_over_predicted"]),
                f3(s["fz0_97_5"])])
 story.append(table(r1, [3.7, 1.9, 1.3, 1.3, 1.2, 1.9, 1.6, 1.2, 1.6, 1.6]))
-story.append(P(f"Table 5. {H['oos_window']['days']} out-of-sample days; {expected99:.0f} breaches expected at 99%. "
+story.append(P(f"Table 5. {H['oos_window']['days']:,} out-of-sample days; {expected99:.0f} breaches expected at 99%. "
                "Breach range across Monte Carlo seeds in brackets. Basel shares are the fraction of rolling 250-day "
                "windows in the red (≥ 10) or yellow (5–9) zone. Z2 p: Acerbi–Szekely test of ES 97.5% (small = ES too "
                "low). Breach loss / ES: average realised loss on VaR-breach days ÷ predicted ES. FZ0: lower is better.", cap))
@@ -334,17 +339,15 @@ story.append(P(
     f"{pv(dmk['T_vs_G']['p'])}), while all beat historical simulation decisively (p ≤ "
     f"{pv(max(dmk[k]['p'] for k in ('G_vs_HS','T_vs_HS','WT_vs_HS','FHS_vs_HS')))}): at one day volatility dynamics "
     "dominate and dependence is a second-order, tail-only effect. Using the H1 wavelet band instead of daily residuals "
-    f"(WT) changes little (WT vs t: DM p = {pv(dmk['WT_vs_T']['p'])}), which is what Section 3 predicts: daily "
+    f"(WT) changes little (WT vs t: DM {pp(dmk['WT_vs_T']['p'])}), which is what Section 3 predicts: daily "
     "dependence is the H1 dependence.", body))
 story.append(P(
-    f"<b>What still fails.</b> Breaches cluster: the Christoffersen and DQ tests reject for every model, driven by "
-    "COVID (Table 6), and the McNeil–Frey test finds realised breach losses about "
+    f"<b>What still fails.</b> Breaches cluster: the dynamic-quantile test rejects every model at 99% and "
+    f"Christoffersen's independence test every model except filtered HS ({pp(fhs1['var99']['p_ind'])}), driven by "
+    "COVID (Table 6). The McNeil–Frey test finds realised breach losses about "
     f"{pct(min(S1[m]['es97_5']['mf_mean_rel_excess'] for m in ('FHS','G','T','WT')),0)}–"
-    f"{pct(max(S1[m]['es97_5']['mf_mean_rel_excess'] for m in ('FHS','G','T','WT')),0)} above predicted ES. We report "
-    "these failures rather than tune them away: a model re-estimated monthly on four years of data cannot anticipate "
-    "a regime change of the size of March 2020.", body))
-story.append(fig("fig2_oos_var99.png", 17.0, "Figure 2. Out-of-sample 99% VaR (negative, % of NAV) and daily portfolio "
-                 "returns. Panel (b) zooms into the COVID crash; red dots are breaches of the wavelet t-copula VaR."))
+    f"{pct(max(S1[m]['es97_5']['mf_mean_rel_excess'] for m in ('FHS','G','T','WT')),0)} above predicted ES. A model "
+    "re-estimated monthly on four years of data cannot anticipate a regime change of the size of March 2020.", body))
 sp = sub.pivot(index="period", columns="model", values="hit99_pct")
 sp95 = sub.pivot(index="period", columns="model", values="hit95_pct")
 days = sub.groupby("period").days.first()
@@ -353,6 +356,8 @@ for per in ["COVID crash (Feb–Jun 2020)", "2022 rate shock", "Other days"]:
     srows.append([per, str(days[per])] + [f"{sp.loc[per, m]:.1f} / {sp95.loc[per, m]:.1f}" for m in ("HS", "FHS", "G", "T", "WT")])
 story.append(KeepTogether([table(srows, [4.4, 1.2, 2.36, 2.36, 2.36, 2.36, 2.36]),
                            P("Table 6. Breach rates (%) by sub-period; targets 1% and 5%.", cap)]))
+story.append(fig("fig2_oos_var99.png", 17.0, "Figure 2. Out-of-sample 99% VaR (negative, % of NAV) and daily portfolio "
+                 "returns. Panel (b) zooms into the COVID crash; red dots are breaches of the wavelet t-copula VaR."))
 story.append(fig("fig3_traffic_light.png", 17.0, "Figure 3. Rolling 250-day count of 99% VaR breaches against the "
                  "Basel traffic-light zones."))
 
@@ -360,38 +365,45 @@ story.append(P(f"4.2 {H_DAYS}-day risk: where the horizon matters", h2))
 story.append(P(
     f"Regulators and asset managers need multi-day risk (FRTB uses a 10-day base horizon). The usual shortcut is "
     f"√10 × 1-day risk. Table 7 replaces one simplification at a time on {SH['n_windows']} non-overlapping 10-day "
-    f"windows, measuring each model's ES 97.5% against the full horizon-aware model ({NAMES_H[BASE]}).", body))
+    f"windows, measuring each model's ES 97.5% against the full horizon-aware model, the wavelet empirical copula on the H2 band.", body))
 r10 = [["Model", "Ignores", "Mean ES 97.5%", "vs full model: all / stressed", "Seed range", "99% / 95% breaches",
         "Breach loss / ES", "FZ0 loss"]]
-ign = {"G_sqrt": "horizon & tails (rule of thumb)", "G_path": "tail dependence", "T_path": "horizon (aggregates daily)",
-       "T_join": "horizon-specific scale", "WC": "asymmetry (parametric t)", "E_join": "horizon-specific scale",
-       "WC_emp": "—"}
+ign = {"G_sqrt": "tails; uses √10 rule", "G_path": "tail dependence", "T_path": "compounds daily draws",
+       "T_join": "asymmetry; band", "WC": "asymmetry (symmetric t)", "E_join": "band (uses daily data)",
+       "WC_emp": "nothing (full model)"}
 for m in NAMES_H:
     s = SH[m]
     g = gaps[m]
-    r10.append([NAMES_H[m], ign[m], pct(s["mean_es97_5"], 2), "—" if m == BASE else f"{spct(g[0])} / {spct(g[2])}",
-                "—" if m == BASE else f"{spct(gap_rng[m][0])} to {spct(gap_rng[m][1])}",
+    r10.append([NAMES_H[m], ign[m], pct(s["mean_es97_5"], 2), "reference" if m == BASE else f"{spct(g[0])} / {spct(g[2])}",
+                "reference" if m == BASE else f"{spct(gap_rng[m][0])} to {spct(gap_rng[m][1])}",
                 f"{s['var99']['hits']} / {s['var95']['hits']}", f2(s["es97_5"]["realised_over_predicted"]), f3(s["fz0_97_5"])])
 story.append(table(r10, [4.0, 3.3, 1.7, 2.6, 2.2, 1.6, 1.4, 1.2]))
 story.append(P(f"Table 7. {SH['n_windows']} non-overlapping 10-day windows, 2020–2026 (expected breaches "
                f"{SH['G_path']['var99']['expected_hits']:.1f} at 99%, {SH['G_path']['var95']['expected_hits']:.1f} at 95%). "
                "'Stressed' = windows in the top quartile of the full model's ES.", cap))
 story.append(P(
-    f"<b>Reading Table 7.</b> (i) Dropping tail dependence (Gaussian paths) lowers 10-day ES by "
+    f"<b>Interpretation.</b> (i) Dropping tail dependence (Gaussian paths) lowers 10-day ES by "
     f"{pct(-gaps['G_path'][0])} on average and {pct(-gaps['G_path'][2])} when risk is high, and this model has the "
     f"largest breach losses relative to ES ({f2(SH['G_path']['es97_5']['realised_over_predicted'])}×). (ii) Building "
     f"10-day risk by compounding a daily t-copula still leaves {pct(-gaps['T_path'][0])}: with independent daily "
-    "draws the joint tail is diluted, while Section 3 shows the observed crash tail is not. (iii) Imposing the copula "
-    "directly at the horizon closes most of that gap, and the empirical copula — which keeps the crash/rally "
-    f"asymmetry — adds the rest (E_join vs full model: {spct(gaps['E_join'][0])}). (iv) The √10 rule lands close on "
-    f"average ({spct(gaps['G_sqrt'][0])}), but only because two errors cancel: it ignores tail dependence and "
-    "assumes volatility persists for ten days, which overstates risk when volatility is high and mean-reverting. "
+    "draws the joint tail is diluted, while Section 3 shows the observed crash tail is not. Imposing the daily "
+    f"t-copula directly at the 10-day horizon removes that dilution ({spct(gaps['T_path'][0])} → "
+    f"{spct(gaps['T_join'][0])}; the H2-band t-copula gives {spct(gaps['WC'][0])}). (iii) The remaining gap is the shape of the tail: the "
+    f"empirical copula, which keeps the crash/rally asymmetry, raises 10-day ES by a further "
+    f"{pct(SH['WC_emp']['mean_es97_5'] / SH['WC']['mean_es97_5'] - 1)}. (iv) Estimating the copula on the H2 band "
+    f"instead of daily data changes little (daily empirical copula vs full model: {spct(gaps['E_join'][0])}), which "
+    "is what Section 3 predicts: crash co-movement at 8–32 days is statistically the same as at the daily scale. The "
+    "wavelet analysis is what justifies carrying daily crash dependence to the 10-day horizon. (v) The √10 rule "
+    f"({spct(gaps['G_sqrt'][0])}) does better than Gaussian paths only because two errors partly cancel: it ignores "
+    f"tail dependence, but scaling a fat-tailed 1-day distribution by √10 overstates the 10-day tail of the same "
+    f"Gaussian model by {pct(sqrt_vs_path)} on average, because 10-day returns have thinner tails than daily ones. "
     f"With {SH['n_windows']} windows the backtest has little power: no model's breach count is rejected and the FZ0 "
-    f"differences are not significant (lowest loss: {NAMES_H[best10]}), so the case for the horizon-aware model rests "
-    "on the in-sample dependence evidence and on its being the only model whose breach losses are not significantly "
-    f"above predicted ES (McNeil–Frey p = {pv(SH[BASE]['es97_5']['mf_p'])}).", body))
+    f"differences are not significant (lowest loss: {NAMES_H[best10]}). The two models that compound daily draws are "
+    f"the only ones whose breach losses are significantly above predicted ES (McNeil–Frey p = "
+    f"{pv(SH['G_path']['es97_5']['mf_p'])} and {pv(SH['T_path']['es97_5']['mf_p'])} respectively; full model p = "
+    f"{pv(SH[BASE]['es97_5']['mf_p'])}).", body))
 story.append(fig("fig4_es10d.png", 17.0, "Figure 4. 10-day ES 97.5% forecasts and realised 10-day portfolio losses; "
-                 "circled points exceed the wavelet-copula VaR 97.5%."))
+                 "circled points exceed the full model's VaR 97.5%."))
 
 # ================================================================= 5. RECOMMENDATION
 story.append(P("5. Recommendation for the risk manager", h1))
@@ -402,11 +414,12 @@ story.append(box([
       f"2020–2026 the Gaussian model breached its 99% VaR {g1['var99']['hits']} times against {expected99:.0f} expected "
       "and was the only copula model to reach the Basel red zone.", boxs),
     P(f"2. <b>10-day limit.</b> Size the 10-day ES from the wavelet empirical-copula model, not √10 × 1-day: "
-      f"{pct(lat['es97_5_10d_' + BASE], 2)} today (√10 × Gaussian: {pct(lat['es97_5_10d_G_sqrt'], 2)}; Gaussian paths: "
-      f"{pct(lat['es97_5_10d_G_path'], 2)}). When volatility is elevated the Gaussian path model understates it by "
-      f"about {pct(-gaps['G_path'][2], 0)}.", boxs),
+      f"{pct(lat['es97_5_10d_' + BASE], 2)} of NAV today (√10 × Gaussian: {pct(lat['es97_5_10d_G_sqrt'], 2)}; Gaussian "
+      f"paths: {pct(lat['es97_5_10d_G_path'], 2)}). Today the shortcut happens to be close, but over 2020–2026 it was "
+      f"below the full model in {pct(sqrt_below, 0)} of windows, by up to {pct(sqrt_worst, 0)}, and the Gaussian path "
+      f"model was below it by {pct(-gaps['G_path'][2], 0)} on average when risk was high.", boxs),
     P("3. <b>Diversification.</b> Do not count on sector diversification in a sell-off at any horizon: crash "
-      "co-movement stays near its daily level up to a quarter, while rally co-movement halves. Hedge with "
+      "co-movement beyond a month is statistically the same as at 2–8 days, while rally co-movement halves. Hedge with "
       "instruments outside the equity sector set, not with sector rotation.", boxs),
     P("4. <b>Trigger.</b> Escalate to the risk committee when the 250-day count of 99% breaches reaches 5 (Basel "
       "yellow). Keep the regulatory capital model unchanged until independent validation; run this as an internal "
@@ -429,7 +442,7 @@ story.append(P(
     "remains: a regime-switching or dynamic (DCC/GAS) copula is the natural next step. (5) Results are for one "
     "equal-weight US sector portfolio; the code is portfolio-agnostic.", body))
 story.append(P(
-    "<b>Next round.</b> Asymmetric parametric copulas per scale (skew-t, vine copulas), dynamic copulas for breach "
+    "<b>Further work.</b> Asymmetric parametric copulas per scale (skew-t, vine copulas), dynamic copulas for breach "
     "clustering, 10-day ES on overlapping windows with HAC-adjusted tests, and the same study on the Colombo Stock "
     "Exchange with corrections for non-synchronous trading.", body))
 
@@ -442,11 +455,12 @@ story.append(P(
     "Yahoo Finance with <font face='Courier'>force=True</font>) and rebuilds this PDF. All randomness is seeded. The "
     "report text reads its numbers from <font face='Courier'>outputs/results.json</font>; none are typed by hand.", body))
 story.append(P(
-    "<b>AI use.</b> We used AI assistants (Anthropic Claude) for literature search, code drafting and debugging, an "
-    "independent code review, and drafting text. The review found errors in an earlier draft — copula families "
-    "compared on non-comparable likelihoods, volatility frozen between refits, and wavelet bands that did not add "
-    "back to the series — which we corrected and now guard with unit tests. The team chose the research question, "
-    "portfolio, models and tests, checked every result, and can explain every line of code and every claim.", body))
+    "<b>AI use.</b> All cognitive and statistical work in this study was done by Team Gmora: framing the research "
+    "question, choosing the portfolio, data and sample split, selecting the margin, wavelet and copula models, "
+    "designing the out-of-sample experiments and validation tests, interpreting the results, and forming the "
+    "recommendation. AI assistants (Anthropic Claude) were used as tools under the team's direction for literature "
+    "search, writing and debugging code, reviewing code for errors, and editing the text. The team checked every "
+    "result and can explain every line of code and every claim in this report.", body))
 
 # ================================================================= REFERENCES (excluded)
 story.append(P("References", h1))
